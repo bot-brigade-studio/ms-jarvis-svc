@@ -40,3 +40,24 @@ class MemoryStore:
 
     def get_context(self, conversation_id: str) -> List[Interaction]:
         return self.conversations.get(conversation_id, [])
+    
+    def remove_last_interaction(self, conversation_id: str):
+        if self.conversations.get(conversation_id):
+            self.conversations[conversation_id].pop()
+
+    def clear_conversation(self, conversation_id: str):
+        if self.conversations.get(conversation_id):
+            self.conversations[conversation_id] = []
+
+    def get_last_interaction(self, conversation_id: str) -> Interaction:
+        if self.conversations.get(conversation_id):
+            return self.conversations[conversation_id][-1]
+        return None
+    
+    def format_to_messages(self, context: List[Interaction]) -> List[Dict[str, str]]:
+        return [
+            {
+                "role": interaction.role,
+                "content": interaction.content
+            } for interaction in context
+        ]

@@ -35,10 +35,10 @@ class LLMService:
         self.openai_client = openai.AsyncClient(api_key=openai_api_key)
         
         self.model_configs = {
-            "claude-3-sonnet-20240229": ModelConfig(
+            "claude-3-5-sonnet-20241022": ModelConfig(
                 temperature=0.7,
                 max_tokens=4096,
-                model_name="claude-3-sonnet-20240229",
+                model_name="claude-3-5-sonnet-20241022",
                 provider=ProviderType.ANTHROPIC
             ),
             "gpt-4o-mini": ModelConfig(
@@ -204,6 +204,7 @@ class LLMService:
         stream = await self.openai_client.chat.completions.create(
             model=config.model_name,
             messages=formatted_messages,
+            max_tokens=config.max_tokens,
             stream=True
         )
         

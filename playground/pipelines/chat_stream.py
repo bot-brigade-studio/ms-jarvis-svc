@@ -1,12 +1,12 @@
-from typing import Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional
 import json
 import logging
-import asyncio
 
 from playground.module.llm_service import LLMService
 from playground.module.memory import MemoryStore
 from playground.prompts.system_prompts import SystemPrompts
 from playground.prompts.user_prompts import UserPrompts
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -31,125 +31,91 @@ class Pipeline:
         logger.info(f"Conversation ID: {conversation_id}")
 
         # Get context
-        context = self.memory.get_context(conversation_id)
-        logger.info(f"Retrieved context: {context}")
-
-        # Get fingerprint
-        logger.info("Getting query fingerprint...")
-        fingerprint_response = await self._get_fingerprint_stream(query, context)
-        logger.info(f"Fingerprint response: {fingerprint_response}")
-
-        route_info = self._parse_fingerprint(fingerprint_response)
-        logger.info(f"Route info: {route_info}")
-
-        # Process based on route
-        logger.info(f"Processing route {route_info['route']}...")
-        response = await self._process_route_stream(
-            query=query,
-            route_info=route_info,
-            context=context
-        )
-
-        # Save to memory
-        logger.info("Saving interaction to memory...")
+        # First add the new interaction
         self.memory.add_interaction(
             conversation_id=conversation_id,
             role="user",
             content=query,
-            route_info=route_info
-        )
-        
-        self.memory.add_interaction(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=response,
-            route_info=route_info
+            route_info={}
         )
 
-        return response, route_info
+        # Then get context and format messages
+        context = self.memory.get_context(conversation_id)
+        logger.info(f"Retrieved context {conversation_id} -> : {context}")
+        messages = self.memory.format_to_messages(context)
 
-    async def _get_fingerprint_stream(self, query: str, context: Optional[str] = None) -> str:
-        """Get query fingerprint using stream"""
-        logger.info("Starting fingerprint stream...")
+        if not messages:
+            raise ValueError("No messages found in context")
+
         full_response = ""
-        
+        json_string = ""
+        current_route = 0
         async for chunk in self.llm_service.generate_stream(
-            model_name="claude-3-sonnet-20240229",
-            messages=[{
-                "role": "user",
-                "content": query,
-            }],
+            model_name="claude-3-5-sonnet-20241022",
+                messages=messages,
             system_prompt=self.system_prompts.FINGERPRINT
         ):
             if chunk.content:
-                full_response += chunk.content
-            
-            if chunk.is_final:
-                break
-
-        return full_response
-
-    async def _process_route_stream(
-        self,
-        query: str,
-        route_info: Dict,
-        context: Optional[str] = None
-    ) -> str:
-        """Process query based on route using stream"""
-        route = route_info["route"]
-        full_response = ""
-        
-        if route == 1:  # DIRECT_SMALL
-            logger.info("Processing DIRECT_SMALL route")
-            model = "gpt-4o-mini"
-            messages = [{
-                "role": "user",
-                "content": self.user_prompts.route_1(query, context)
-            }]
-            system_prompt = self.system_prompts.ROUTE_1
-
-        elif route == 2:  # GUIDED_SMALL
-            logger.info("Processing GUIDED_SMALL route")
-            model = "gpt-4o-mini"
-            messages = [{
-                "role": "user",
-                "content": self.user_prompts.route_2(
-                    query,
-                    route_info["guidance"],
-                    context
-                )
-            }]
-            system_prompt = self.system_prompts.ROUTE_2
-
-        else:  # DIRECT_LARGE
-            logger.info("Processing DIRECT_LARGE route")
-            model = "claude-3-sonnet-20240229"
-            messages = [{
-                "role": "user",
-                "content": self.user_prompts.route_3(query, context)
-            }]
-            system_prompt = self.system_prompts.ROUTE_3
-
-        async for chunk in self.llm_service.generate_stream(
-            model_name=model,
-            messages=messages,
-            system_prompt=system_prompt
-        ):
-            if chunk.content:
-                full_response += chunk.content
-                logger.debug(f"Response chunk received: {chunk.content}")
+                json_string += chunk.content
+                route_match = re.search(r'"route":\s*([123])', json_string)
+                if route_match:
+                    current_route = int(route_match.group(1))
+                    if current_route == 1:
+                        break
                 
             if chunk.is_final:
-                logger.info("Response stream completed")
                 break
 
-        return full_response
+        json_dict = self._parse_json_string(json_string)
+        if current_route == 1:
+            logger.info("Processing DIRECT_SMALL route")
+            async for chunk in self.llm_service.generate_stream(
+                model_name="gpt-4o-mini",
+                messages=messages,
+                system_prompt=self.system_prompts.ROUTE_1
+            ):
+                if chunk.content:
+                    full_response += chunk.content
+                    logger.debug(f"Response chunk received: {chunk.content}")
+                
+                if chunk.is_final:
+                    logger.info("Response stream completed")
+                    break
+            
+        elif current_route == 2:
+            logger.info("Processing GUIDED_SMALL route")
+            guidance = json_dict["guidance"]
+            self.system_prompts.set_guidance(guidance)
+            system_prompt = self.system_prompts.ROUTE_2
 
-    def _parse_fingerprint(self, response: str) -> Dict:
-        """Parse fingerprint response"""
+            async for chunk in self.llm_service.generate_stream(
+                model_name="gpt-4o-mini",
+                messages=messages,
+                system_prompt=system_prompt
+            ):
+                if chunk.content:
+                    full_response += chunk.content
+                    logger.debug(f"Response chunk received: {chunk.content}")
+                
+                if chunk.is_final:
+                    logger.info("Response stream completed")
+                    break
+
+        elif current_route == 3:
+            logger.info("Processing DIRECT_LARGE route")
+            response = json_dict["response"]
+            full_response = response
+
+            
+
+        return full_response, current_route
+
+    def _parse_json_string(self, json_string: str) -> Dict:
+        """Parse json string"""
         try:
-            logger.info("Parsing fingerprint response")
-            return json.loads(response)
+            logger.info("Parsing json string")
+            logger.info(f"JSON String: {json_string}")
+            return json.loads(json_string)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse fingerprint: {e}")
+            logger.error(f"Failed to parse json string: {e}")
             raise ValueError("Invalid fingerprint response format")

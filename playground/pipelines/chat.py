@@ -52,7 +52,7 @@ class Pipeline:
     async def _get_fingerprint(self, query: str, context: Optional[str] = None) -> str:
         """Get query fingerprint from Anthropic"""
         return await self.llm_service.generate_response(
-            model_name="claude-3-sonnet-20240229",
+            model_name="claude-3-5-sonnet-20241022",
             messages=[{
                 "role": "user",
                 "content": self.user_prompts.fingerprint(query, context)
@@ -95,7 +95,7 @@ class Pipeline:
 
         else:  # DIRECT_LARGE
             return await self.llm_service.generate_response(
-                model_name="claude-3-sonnet-20240229",
+                model_name="claude-3-5-sonnet-20241022",
                 messages=[{
                     "role": "user",
                     "content": self.user_prompts.route_3(query, context)
