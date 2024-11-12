@@ -35,6 +35,15 @@ class InputType(Enum):
 
 class RouteDecision(BaseModel):
     route_id: str
+    system_prompt_additions: Optional[str] = None  # Additional system prompt for next node
+    user_input_transform: Optional[str] = None     # Modified user input for next node
+    metadata: Dict[str, Any] = {}
+    
+class NodeContext(BaseModel):
+    """Context passed between nodes"""
+    original_input: str
+    current_input: str
+    system_prompt_additions: List[str] = []
     metadata: Dict[str, Any] = {}
 class LLMResponse(BaseModel):
     content: str

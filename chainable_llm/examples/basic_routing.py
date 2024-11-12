@@ -3,8 +3,9 @@
 import os
 import json
 from dotenv import load_dotenv
-from chainable_llm.core.types import InputType, LLMConfig, PromptConfig, RouteDecision
+from chainable_llm.core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
 from chainable_llm.nodes.enhanced_base import EnhancedLLMNode
+from chainable_llm.transformers.base import DataTransformer
 
 async def create_smart_flow():
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -54,7 +55,7 @@ async def create_smart_flow():
             input_type=InputType.USER_PROMPT,
             template="Verify and provide factual information about: {input}",
             base_system_prompt="You are a fact checker focused on accuracy."
-        )
+        ),
     )
 
     # Create routing node (initial node)
@@ -97,29 +98,29 @@ async def create_smart_flow():
         }
     )
 
-    async def parse_routing_response(content: str) -> RouteDecision:
+    async def parse_routing_response(content: str, context: NodeContext) -> RouteDecision:
         """Parse LLM response and convert to RouteDecision"""
         try:
-            # Clean and parse the JSON response
             clean_content = content.strip()
             if clean_content.startswith("```json"):
                 clean_content = clean_content.replace("```json", "").replace("```", "")
             
             decision = json.loads(clean_content)
+            
+            # Create system prompt addition from the guidance
+            system_prompt_addition = f"Additional context: {decision.get('guidance', '')}"
+            
             return RouteDecision(
                 route_id=decision["route_id"],
+                system_prompt_additions=system_prompt_addition,
                 metadata={
                     "reason": decision["reason"],
                     "priority": decision["priority"],
                     "guidance": decision["guidance"]
                 }
             )
-        except json.JSONDecodeError as e:
-            print(f"Error parsing JSON: {e}")
-            # Fallback to default route
-            return RouteDecision(route_id="to_factual")
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"Error in routing: {e}")
             return RouteDecision(route_id="to_factual")
 
     # Set the router function
@@ -133,9 +134,9 @@ async def main():
     
     # Test cases
     test_cases = [
-        "Write a story about a magical forest",
+        # "Write a story about a magical forest",
         # "Analyze the impact of AI on healthcare",
-        # "What are the key events of World War 2?",
+        "What are the key events of World War 2?",
         # "Create a marketing slogan for a new smartphone",
         # "Explain quantum computing principles",
         # "Verify these historical dates and events"
