@@ -33,11 +33,14 @@ class InputType(Enum):
     USER_PROMPT = "user"
     APPEND_SYSTEM = "append_system"
 
+class RouteDecision(BaseModel):
+    route_id: str
+    metadata: Dict[str, Any] = {}
 class LLMResponse(BaseModel):
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = {}
     error: Optional[str] = None
-
+    route_decision: Optional[RouteDecision] = None
 class LLMConfig(BaseModel):
     provider: str
     api_key: str
