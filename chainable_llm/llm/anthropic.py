@@ -39,7 +39,7 @@ class AnthropicProvider(BaseLLMProvider):
                 system=system_prompt,
                 messages=messages,
                 temperature=temperature or self.config.temperature,
-                max_tokens=max_tokens or self.config.max_tokens
+                max_tokens=max_tokens or self.config.max_tokens or 4096
             )
             additional_kwargs = {
                 "messages": messages,
