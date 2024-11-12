@@ -11,10 +11,11 @@ def log_error(error: Exception, context: dict[str, Any] = None):
         **context or {}
     )
 
-def log_llm_request(provider: str, model: str, tokens: int):
+def log_llm_request(provider: str, model: str, tokens: int, **kwargs):
     logger.info(
         "llm_request",
         provider=provider,
         model=model,
-        tokens=tokens
+        tokens=tokens,
+        **kwargs
     )

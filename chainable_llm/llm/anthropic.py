@@ -3,6 +3,7 @@ from anthropic import AsyncAnthropic
 from typing import Dict, List, Optional
 
 from chainable_llm.core.exceptions import LLMProviderError
+from chainable_llm.core.logging import log_llm_request
 from chainable_llm.core.types import ConversationHistory, LLMConfig, LLMResponse, MessageRole
 from chainable_llm.llm.base import BaseLLMProvider
 
@@ -39,6 +40,17 @@ class AnthropicProvider(BaseLLMProvider):
                 messages=messages,
                 temperature=temperature or self.config.temperature,
                 max_tokens=max_tokens or self.config.max_tokens
+            )
+            additional_kwargs = {
+                "messages": messages,
+                "system_prompt": system_prompt,
+                "response": response.content[0].text
+            }
+            log_llm_request(
+                provider="anthropic",
+                model=self.config.model,
+                tokens=response.usage.output_tokens,
+                **additional_kwargs
             )
 
             return LLMResponse(

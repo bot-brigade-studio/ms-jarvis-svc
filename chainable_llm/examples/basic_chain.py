@@ -73,17 +73,17 @@ async def main():
         print("\nFinal Result:")
         print(result.content)
 
-        if result.error:
-            print("\nError occurred:", result.error)
+        # if result.error:
+        #     print("\nError occurred:", result.error)
 
-        # Print conversation histories
-        print("\nAnalyzer Conversation:")
-        for msg in analyzer.conversation.messages:
-            print(f"{msg.role.value}: {msg.content}")
+        # # Print conversation histories
+        # print("\nAnalyzer Conversation:")
+        # for msg in analyzer.conversation.messages:
+        #     print(f"{msg.role.value}: {msg.content}")
 
-        print("\nSummarizer Conversation:")
-        for msg in summarizer.conversation.messages:
-            print(f"{msg.role.value}: {msg.content}")
+        # print("\nSummarizer Conversation:")
+        # for msg in summarizer.conversation.messages:
+        #     print(f"{msg.role.value}: {msg.content}")
 
     except Exception as e:
         print(f"Error: {str(e)}")

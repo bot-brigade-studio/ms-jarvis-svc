@@ -41,10 +41,16 @@ class OpenAIProvider(BaseLLMProvider):
                 max_tokens=max_tokens or self.config.max_tokens
             )
 
+            additional_kwargs = {
+                "messages": messages,
+                "system_prompt": system_prompt,
+                "response": response.choices[0].message.content
+            }
             log_llm_request(
                 provider="openai",
                 model=self.config.model,
-                tokens=response.usage.total_tokens
+                tokens=response.usage.total_tokens,
+                **additional_kwargs
             )
 
             return LLMResponse(
