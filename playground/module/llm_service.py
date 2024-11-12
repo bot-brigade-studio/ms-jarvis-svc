@@ -98,7 +98,7 @@ class LLMService:
             response = await self.anthropic_client.messages.create(
                 model=config.model_name,
                 messages=messages,
-                system=system_prompt,  # Anthropic uses system parameter
+                system=system_prompt,
                 temperature=temperature or config.temperature,
                 max_tokens=max_tokens or config.max_tokens
             )
