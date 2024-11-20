@@ -5,7 +5,7 @@ from core.streaming import StreamBuffer
 from llm.base import BaseLLMProvider
 from core.types import ConversationHistory, LLMResponse, LLMConfig, StreamChunk
 from core.exceptions import LLMProviderError
-from core.logging import log_llm_request, log_error, log_stream_chunk
+from core.logging import log_llm_request, log_error, log_stream_chunk, log_any
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):
@@ -87,6 +87,16 @@ class OpenAIProvider(BaseLLMProvider):
                     "role": msg.role.value,
                     "content": msg.content
                 })
+                
+            message_exclude_system = [m for m in messages if m["role"] != "system"]
+                
+            log_any(message="Generating stream with OpenAI", **{
+                "model": self.config.model,
+                "system_prompt": system_prompt,
+                "messages": message_exclude_system,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            })
 
             stream = await self.client.chat.completions.create(
                 model=self.config.model,

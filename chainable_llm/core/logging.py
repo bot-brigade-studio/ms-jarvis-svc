@@ -20,6 +20,9 @@ def log_llm_request(provider: str, model: str, tokens: int, **kwargs):
         **kwargs
     )
     
+def log_any(message: str, **kwargs):
+    logger.info(message, **kwargs)
+    
 def log_stream_chunk(provider: str, chunk_size: int, is_final: bool, **kwargs):
     pass
     # logger.debug(

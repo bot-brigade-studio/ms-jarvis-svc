@@ -33,11 +33,6 @@ async def fingerprint_router(content: str, context: NodeContext) -> RouteDecisio
     Route based on content fingerprint from structured JSON response
     """
     try:
-
-        # print(f"Fingerprint router received: {content}")
-        print("\n\n\n")
-        # print(f"Fingerprint router context: {context}")
-        
         # Parse the JSON response from the fingerprint node
         analysis = json.loads(content)
         

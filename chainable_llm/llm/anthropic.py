@@ -3,7 +3,7 @@ from anthropic import AsyncAnthropic
 from typing import AsyncIterator, Dict, List, Optional
 
 from core.exceptions import LLMProviderError
-from core.logging import log_llm_request
+from core.logging import log_llm_request, log_any
 from core.streaming import StreamBuffer
 from core.types import ConversationHistory, LLMConfig, LLMResponse, StreamChunk
 from llm.base import BaseLLMProvider
@@ -72,6 +72,15 @@ class AnthropicProvider(BaseLLMProvider):
         try:
             messages = self._convert_messages(conversation)
             
+            message_exclude_system = [m for m in messages if m["role"] != "system"]
+            
+            log_any(message="Generating stream with Anthropic", **{
+                "model": self.config.model,
+                "system_prompt": system_prompt,
+                "messages": message_exclude_system,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            })
             stream = await self.client.messages.create(
                 model=self.config.model,
                 system=system_prompt,
