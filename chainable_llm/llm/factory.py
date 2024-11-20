@@ -1,9 +1,9 @@
 from typing import Dict, Type
-from .base import BaseLLMProvider
-from .openai import OpenAIProvider
-from .anthropic import AnthropicProvider
-from ..core.types import LLMConfig
-from ..core.exceptions import ChainConfigError
+from llm.base import BaseLLMProvider
+from llm.openai import OpenAIProvider
+from llm.anthropic import AnthropicProvider
+from core.types import LLMConfig
+from core.exceptions import ChainConfigError
 
 class LLMFactory:
     _providers: Dict[str, Type[BaseLLMProvider]] = {

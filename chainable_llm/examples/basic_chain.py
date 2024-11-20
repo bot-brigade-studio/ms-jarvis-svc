@@ -1,14 +1,14 @@
-# chainable_llm/examples/basic_chain.py
+# examples/basic_chain.py
 import asyncio
 import os
 from dotenv import load_dotenv
-from ..core.types import (
+from core.types import (
     LLMConfig, 
     PromptConfig, 
     InputType
 )
-from ..nodes.base import LLMNode
-from ..transformers.implementations import TextNormalizer
+from nodes.base import LLMNode
+from transformers.implementations import TextNormalizer
 
 async def main():
     # Load environment variables

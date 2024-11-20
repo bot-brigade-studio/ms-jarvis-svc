@@ -2,10 +2,10 @@
 from anthropic import AsyncAnthropic
 from typing import Dict, List, Optional
 
-from chainable_llm.core.exceptions import LLMProviderError
-from chainable_llm.core.logging import log_llm_request
-from chainable_llm.core.types import ConversationHistory, LLMConfig, LLMResponse, MessageRole
-from chainable_llm.llm.base import BaseLLMProvider
+from core.exceptions import LLMProviderError
+from core.logging import log_llm_request
+from core.types import ConversationHistory, LLMConfig, LLMResponse, MessageRole
+from llm.base import BaseLLMProvider
 
 class AnthropicProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):

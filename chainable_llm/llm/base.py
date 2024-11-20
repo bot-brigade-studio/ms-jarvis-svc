@@ -1,7 +1,7 @@
 # llm/base.py
 from abc import ABC, abstractmethod
 from typing import Optional
-from ..core.types import LLMConfig, LLMResponse, ConversationHistory
+from core.types import LLMConfig, LLMResponse, ConversationHistory
 
 class BaseLLMProvider(ABC):
     def __init__(self, config: LLMConfig):

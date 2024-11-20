@@ -1,7 +1,7 @@
 from typing import Optional, Callable, Any, Dict
 
-from chainable_llm.transformers.base import DataTransformer
-from ..core.types import (
+from transformers.base import DataTransformer
+from core.types import (
     LLMConfig,
     NodeContext, 
     PromptConfig, 
@@ -11,8 +11,8 @@ from ..core.types import (
     InputType,
     RouteDecision
 )
-from ..llm.factory import LLMFactory
-from ..core.logging import logger
+from llm.factory import LLMFactory
+from core.logging import logger
 
 class LLMNode:
     def __init__(

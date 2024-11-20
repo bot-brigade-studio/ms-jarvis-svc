@@ -1,10 +1,12 @@
-# chainable_llm/examples/smart_routing_flow.py
-
+# examples/basic_routing.py
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from dotenv import load_dotenv
-from chainable_llm.core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
-from chainable_llm.nodes.base import LLMNode
+from core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
+from nodes.base import LLMNode
 
 async def create_smart_flow():
     openai_api_key = os.getenv("OPENAI_API_KEY")

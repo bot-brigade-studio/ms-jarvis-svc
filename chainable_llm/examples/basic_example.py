@@ -1,14 +1,14 @@
-# chainable_llm/examples/smart_routing.py
+# examples/smart_routing.py
 
 import asyncio
 import os
 from dotenv import load_dotenv
-from ..core.types import (
+from core.types import (
     LLMConfig, 
     PromptConfig, 
     InputType,
 )
-from ..nodes.base import LLMNode
+from nodes.base import LLMNode
 
 # Example usage with different prompt types
 async def main():

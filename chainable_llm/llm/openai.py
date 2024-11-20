@@ -1,10 +1,10 @@
 from typing import Optional
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
-from .base import BaseLLMProvider
-from ..core.types import ConversationHistory, LLMResponse, LLMConfig
-from ..core.exceptions import LLMProviderError
-from ..core.logging import log_llm_request, log_error
+from llm.base import BaseLLMProvider
+from core.types import ConversationHistory, LLMResponse, LLMConfig
+from core.exceptions import LLMProviderError
+from core.logging import log_llm_request, log_error
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):

@@ -1,7 +1,7 @@
 import json
 from typing import Any
-from .base import DataTransformer
-from ..core.exceptions import TransformerError
+from transformers.base import DataTransformer
+from core.exceptions import TransformerError
 
 class JSONTransformer(DataTransformer):
     async def transform(self, data: Any) -> str:
