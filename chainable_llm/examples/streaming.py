@@ -20,7 +20,7 @@ from nodes.base import LLMNode
 
 async def stream_callback(chunk: StreamChunk):
     """Example callback to handle streaming chunks"""
-    print(f"Received chunk: {chunk.content}", end="", flush=True)
+    print(f"{chunk.content}", end="", flush=True)
     if chunk.done:
         print("\n--- Stream completed ---")
 
@@ -59,8 +59,6 @@ async def main():
     
     # Process with streaming
     async for chunk in streaming_node.process_stream(test_input):
-        print(f"Received chunk: {chunk.content}", end="", flush=True)
-        # Additional processing can be done here if needed
         pass
 
 if __name__ == "__main__":

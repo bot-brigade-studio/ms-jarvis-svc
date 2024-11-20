@@ -103,12 +103,12 @@ class StreamBuffer:
                 )
                 
                 # Log chunk creation
-                logger.debug(
-                    "stream_chunk_created",
-                    chunk_size=len(chunk_content),
-                    chunk_index=self._chunk_count,
-                    is_final=done
-                )
+                # logger.debug(
+                #     "stream_chunk_created",
+                #     chunk_size=len(chunk_content),
+                #     chunk_index=self._chunk_count,
+                #     is_final=done
+                # )
                 
                 # Handle callback if configured
                 if self.config.callback:
