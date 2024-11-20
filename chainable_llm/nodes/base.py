@@ -1,14 +1,15 @@
-# nodes/base.py
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 
 from chainable_llm.transformers.base import DataTransformer
 from ..core.types import (
-    LLMConfig, 
+    LLMConfig,
+    NodeContext, 
     PromptConfig, 
     LLMResponse, 
     ConversationHistory,
     MessageRole,
-    InputType
+    InputType,
+    RouteDecision
 )
 from ..llm.factory import LLMFactory
 from ..core.logging import logger
@@ -18,44 +19,82 @@ class LLMNode:
         self,
         llm_config: LLMConfig,
         prompt_config: PromptConfig,
+        name: str = None,
         transformer: Optional[DataTransformer] = None,
+        # Legacy routing support
         next_node: Optional['LLMNode'] = None,
-        condition: Optional[Callable[[str], bool]] = None
+        condition: Optional[Callable[[str], bool]] = None,
+        # Enhanced routing support
+        router: Optional[Callable[[str, NodeContext], RouteDecision]] = None,
+        routes: Optional[Dict[str, 'LLMNode']] = None
     ):
+        self.name = name
         self.llm = LLMFactory.create(llm_config)
         self.prompt_config = prompt_config
         self.transformer = transformer
+        # Legacy routing
         self.next_node = next_node
         self.condition = condition
+        # Enhanced routing
+        self.router = router
+        self.routes = routes or {}
         self.conversation = ConversationHistory()
 
-    async def _build_prompt(self, input_text: str) -> tuple[Optional[str], str]:
+    async def _build_prompt(self, context: NodeContext | str) -> tuple[Optional[str], str]:
         """
-        Build the final prompt based on the prompt configuration and input type.
-        Returns a tuple of (system_prompt, user_prompt)
+        Build the final prompt based on the prompt configuration and context.
+        Supports both string input (legacy) and NodeContext (enhanced).
         """
+        input_text = context.current_input if isinstance(context, NodeContext) else context
         formatted_input = self.prompt_config.template.format(input=input_text)
         
         if self.prompt_config.input_type == InputType.SYSTEM_PROMPT:
-            return formatted_input, ""
+            system_prompt = formatted_input
         elif self.prompt_config.input_type == InputType.APPEND_SYSTEM:
             base_system = self.prompt_config.base_system_prompt or ""
-            return f"{base_system}\n{formatted_input}", ""
+            system_prompt = f"{base_system}\n{formatted_input}"
         else:  # InputType.USER_PROMPT
-            return self.prompt_config.base_system_prompt, formatted_input
+            system_prompt = self.prompt_config.base_system_prompt or ""
+            
+        # Add system prompt additions if using enhanced context
+        if isinstance(context, NodeContext) and context.system_prompt_additions:
+            system_prompt = f"{system_prompt}\n{' '.join(context.system_prompt_additions)}"
+            
+        return system_prompt, formatted_input if self.prompt_config.input_type == InputType.USER_PROMPT else ""
 
-    async def process(self, input_data: Any) -> LLMResponse:
+    async def reset_conversation(self):
+        """Reset the conversation history"""
+        self.conversation = ConversationHistory()
+
+    async def process(self, input_data: Any, context: Optional[NodeContext] = None) -> LLMResponse:
+        """
+        Process input through the LLM node with support for both legacy and enhanced routing.
+        """
         try:
-            # Transform input if transformer exists
+            # Handle context initialization
+            if context is None and (self.router or self.routes):
+                # Create context for enhanced routing
+                context = NodeContext(
+                    original_input=str(input_data),
+                    current_input=str(input_data)
+                )
+            
+            # Transform input
             if self.transformer:
-                input_text = await self.transformer.transform(input_data)
-            else:
-                input_text = str(input_data)
+                transformed_input = await self.transformer.transform(
+                    context.current_input if context else input_data
+                )
+                if context:
+                    context.current_input = transformed_input
+                else:
+                    input_data = transformed_input
 
-            # Build prompts using template
-            system_prompt, user_prompt = await self._build_prompt(input_text)
+            # Build prompts
+            system_prompt, user_prompt = await self._build_prompt(
+                context if context else input_data
+            )
 
-            # If we have a user prompt, add it to conversation
+            # Add user message to conversation if present
             if user_prompt:
                 self.conversation.add_message(
                     role=MessageRole.USER,
@@ -76,9 +115,38 @@ class LLMNode:
                 content=response.content
             )
 
-            # Process next node if conditions are met
-            if self.next_node and (not self.condition or self.condition(response.content)):
+            # Enhanced routing
+            if self.router and context:
+                route_decision = await self.router(response.content, context)
+                
+                if route_decision and route_decision.route_id in self.routes:
+                    next_node = self.routes[route_decision.route_id]
+                    
+                    # Update context for next node
+                    if route_decision.system_prompt_additions:
+                        context.system_prompt_additions.append(
+                            route_decision.system_prompt_additions
+                        )
+                    
+                    # Update input and metadata
+                    context.current_input = (
+                        route_decision.user_input_transform or context.original_input
+                    )
+                    context.metadata.update(route_decision.metadata)
+                    
+                    # Process next node with updated context
+                    return await next_node.process(context.current_input, context)
+
+                # Include routing decision in response
+                response.route_decision = route_decision
+
+            # Legacy routing fallback
+            elif self.next_node and (not self.condition or self.condition(response.content)):
                 return await self.next_node.process(response.content)
+
+            # Add context to metadata if available
+            if context:
+                response.metadata["context"] = context.dict()
 
             return response
 
@@ -97,7 +165,3 @@ class LLMNode:
                 },
                 error=str(e)
             )
-
-    async def reset_conversation(self):
-        """Reset the conversation history"""
-        self.conversation = ConversationHistory()

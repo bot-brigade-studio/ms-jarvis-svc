@@ -4,8 +4,7 @@ import os
 import json
 from dotenv import load_dotenv
 from chainable_llm.core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
-from chainable_llm.nodes.enhanced_base import EnhancedLLMNode
-from chainable_llm.transformers.base import DataTransformer
+from chainable_llm.nodes.base import LLMNode
 
 async def create_smart_flow():
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -13,7 +12,7 @@ async def create_smart_flow():
         raise ValueError("OPENAI_API_KEY not found in environment variables")
 
     # Create specialized nodes first
-    creative_node = EnhancedLLMNode(
+    creative_node = LLMNode(
         name="creative",
         llm_config=LLMConfig(
             provider="openai",
@@ -28,7 +27,7 @@ async def create_smart_flow():
         )
     )
 
-    analytical_node = EnhancedLLMNode(
+    analytical_node = LLMNode(
         name="analytical",
         llm_config=LLMConfig(
             provider="openai",
@@ -43,7 +42,7 @@ async def create_smart_flow():
         )
     )
 
-    factual_node = EnhancedLLMNode(
+    factual_node = LLMNode(
         name="factual",
         llm_config=LLMConfig(
             provider="openai",
@@ -59,7 +58,7 @@ async def create_smart_flow():
     )
 
     # Create routing node (initial node)
-    routing_node = EnhancedLLMNode(
+    routing_node = LLMNode(
         name="router",
         llm_config=LLMConfig(
             provider="openai",
@@ -107,6 +106,8 @@ async def create_smart_flow():
             
             decision = json.loads(clean_content)
             
+            print(f"Routing decision: {decision}")
+            
             # Create system prompt addition from the guidance
             system_prompt_addition = f"Additional context: {decision.get('guidance', '')}"
             
@@ -150,6 +151,9 @@ async def main():
             # Process the query
             response = await flow.process(query)
             
+            print("\nFinal Response:")
+            print(response.content)
+            
             # Print routing decision
             if response.route_decision and response.route_decision.metadata:
                 print("\nRouting Decision:")
@@ -157,15 +161,6 @@ async def main():
                 print(f"Reason: {response.route_decision.metadata.get('reason')}")
                 print(f"Priority: {response.route_decision.metadata.get('priority')}")
                 print(f"Guidance: {response.route_decision.metadata.get('guidance')}")
-            
-            # Print final response
-            # print("\nFinal Response:")
-            # print(response.content)
-            
-            # # Print conversation history
-            # print("\nConversation Flow:")
-            # for node in response.node_path:
-            #     print(f"-> {node}")
             
         except Exception as e:
             print(f"Error processing query: {e}")
