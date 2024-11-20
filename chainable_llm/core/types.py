@@ -1,12 +1,8 @@
-from enum import Enum
-from typing import List, Optional, Any, Dict, Union
-from pydantic import BaseModel, Field
-
 # core/types.py
-from enum import Enum
-from typing import List, Optional
-from pydantic import BaseModel
 
+from enum import Enum
+from typing import AsyncIterator, Awaitable, Callable, List, Optional, Any, Dict, Union
+from pydantic import BaseModel, ConfigDict, Field
 class MessageRole(Enum):
     SYSTEM = "system"
     USER = "user"
@@ -45,11 +41,25 @@ class NodeContext(BaseModel):
     current_input: str
     system_prompt_additions: List[str] = []
     metadata: Dict[str, Any] = {}
-class LLMResponse(BaseModel):
+
+class PromptConfig(BaseModel):
+    input_type: InputType
+    template: str
+    base_system_prompt: Optional[str] = None
+    
+
+class StreamChunk(BaseModel):
     content: str
     metadata: Dict[str, Any] = {}
-    error: Optional[str] = None
-    route_decision: Optional[RouteDecision] = None
+    done: bool = False
+
+class StreamConfig(BaseModel):
+    enabled: bool = False
+    chunk_size: int = 100
+    buffer_size: int = 1024
+    callback: Optional[Callable[[StreamChunk], Awaitable[None]]] = None
+
+# Update LLMConfig to include streaming
 class LLMConfig(BaseModel):
     provider: str
     api_key: str
@@ -59,8 +69,15 @@ class LLMConfig(BaseModel):
     max_retries: int = 3
     temperature: float = 0.7
     max_tokens: Optional[int] = None
+    streaming: Optional[StreamConfig] = None
 
-class PromptConfig(BaseModel):
-    input_type: InputType
-    template: str
-    base_system_prompt: Optional[str] = None
+# Update LLMResponse to handle streaming
+class LLMResponse(BaseModel):
+    """Response from LLM providers"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    content: str
+    metadata: Dict[str, Any] = {}
+    error: Optional[str] = None
+    route_decision: Optional[RouteDecision] = None
+    stream: Optional[AsyncIterator[StreamChunk]] = None

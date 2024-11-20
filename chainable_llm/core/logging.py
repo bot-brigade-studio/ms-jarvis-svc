@@ -19,3 +19,12 @@ def log_llm_request(provider: str, model: str, tokens: int, **kwargs):
         tokens=tokens,
         **kwargs
     )
+    
+def log_stream_chunk(provider: str, chunk_size: int, is_final: bool, **kwargs):
+    logger.debug(
+        "stream_chunk_processed",
+        provider=provider,
+        chunk_size=chunk_size,
+        is_final=is_final,
+        **kwargs
+    )

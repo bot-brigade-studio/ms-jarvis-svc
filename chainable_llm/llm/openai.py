@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import AsyncIterator, Optional
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
+from core.streaming import StreamBuffer
 from llm.base import BaseLLMProvider
-from core.types import ConversationHistory, LLMResponse, LLMConfig
+from core.types import ConversationHistory, LLMResponse, LLMConfig, StreamChunk
 from core.exceptions import LLMProviderError
-from core.logging import log_llm_request, log_error
+from core.logging import log_llm_request, log_error, log_stream_chunk
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):
@@ -67,3 +68,62 @@ class OpenAIProvider(BaseLLMProvider):
         except Exception as e:
             log_error(e, {"provider": "openai", "model": self.config.model})
             raise LLMProviderError(f"OpenAI API error: {str(e)}")
+
+    async def generate_stream(
+        self,
+        system_prompt: Optional[str],
+        conversation: ConversationHistory,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ) -> AsyncIterator[StreamChunk]:
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            
+            # Convert conversation history
+            for msg in conversation.messages:
+                messages.append({
+                    "role": msg.role.value,
+                    "content": msg.content
+                })
+
+            stream = await self.client.chat.completions.create(
+                model=self.config.model,
+                messages=messages,
+                temperature=temperature or self.config.temperature,
+                max_tokens=max_tokens or self.config.max_tokens,
+                stream=True
+            )
+
+            buffer = StreamBuffer(self.config.streaming)
+            
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    stream_chunk = await buffer.process_chunk(
+                        content,
+                        done=False
+                    )
+                    
+                    if stream_chunk:
+                        log_stream_chunk(
+                            provider="openai",
+                            chunk_size=len(stream_chunk.content),
+                            is_final=False
+                        )
+                        yield stream_chunk
+
+            # Handle final chunk
+            final_chunk = await buffer.process_chunk("", done=True)
+            if final_chunk:
+                log_stream_chunk(
+                    provider="openai",
+                    chunk_size=len(final_chunk.content),
+                    is_final=True
+                )
+                yield final_chunk
+
+        except Exception as e:
+            log_error(e, {"provider": "openai", "model": self.config.model})
+            raise LLMProviderError(f"OpenAI streaming error: {str(e)}")

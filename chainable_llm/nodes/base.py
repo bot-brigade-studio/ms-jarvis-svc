@@ -1,5 +1,6 @@
-from typing import Optional, Callable, Any, Dict
+from typing import AsyncIterator, Awaitable, Optional, Callable, Any, Dict
 
+from core.streaming import StreamBuffer
 from transformers.base import DataTransformer
 from core.types import (
     LLMConfig,
@@ -9,7 +10,8 @@ from core.types import (
     ConversationHistory,
     MessageRole,
     InputType,
-    RouteDecision
+    RouteDecision,
+    StreamChunk
 )
 from llm.factory import LLMFactory
 from core.logging import logger
@@ -21,24 +23,22 @@ class LLMNode:
         prompt_config: PromptConfig,
         name: str = None,
         transformer: Optional[DataTransformer] = None,
-        # Legacy routing support
         next_node: Optional['LLMNode'] = None,
         condition: Optional[Callable[[str], bool]] = None,
-        # Enhanced routing support
         router: Optional[Callable[[str, NodeContext], RouteDecision]] = None,
-        routes: Optional[Dict[str, 'LLMNode']] = None
+        routes: Optional[Dict[str, 'LLMNode']] = None,
+        stream_callback: Optional[Callable[[StreamChunk], Awaitable[None]]] = None
     ):
         self.name = name
         self.llm = LLMFactory.create(llm_config)
         self.prompt_config = prompt_config
         self.transformer = transformer
-        # Legacy routing
         self.next_node = next_node
         self.condition = condition
-        # Enhanced routing
         self.router = router
         self.routes = routes or {}
         self.conversation = ConversationHistory()
+        self.stream_callback = stream_callback
 
     async def _build_prompt(self, context: NodeContext | str) -> tuple[Optional[str], str]:
         """
@@ -164,4 +164,110 @@ class LLMNode:
                     "node_id": id(self)
                 },
                 error=str(e)
+            )
+            
+    async def process_stream(
+        self, 
+        input_data: Any, 
+        context: Optional[NodeContext] = None
+    ) -> AsyncIterator[StreamChunk]:
+        """Process input with streaming support."""
+        try:
+            # Initialize context if needed (similar to regular process)
+            if context is None and (self.router or self.routes):
+                context = NodeContext(
+                    original_input=str(input_data),
+                    current_input=str(input_data)
+                )
+            
+            # Transform input if needed
+            if self.transformer:
+                transformed_input = await self.transformer.transform(
+                    context.current_input if context else input_data
+                )
+                if context:
+                    context.current_input = transformed_input
+                else:
+                    input_data = transformed_input
+
+            # Build prompts
+            system_prompt, user_prompt = await self._build_prompt(
+                context if context else input_data
+            )
+
+            # Add user message to conversation
+            if user_prompt:
+                self.conversation.add_message(
+                    role=MessageRole.USER,
+                    content=user_prompt
+                )
+
+            # Generate streaming response
+            buffer = StreamBuffer(self.llm.config.streaming)
+            accumulated_content = []
+
+            async for chunk in self.llm.generate_stream(
+                system_prompt=system_prompt,
+                conversation=self.conversation,
+                temperature=self.llm.config.temperature,
+                max_tokens=self.llm.config.max_tokens
+            ):
+                accumulated_content.append(chunk.content)
+                
+                # Handle callback if configured
+                if self.stream_callback:
+                    await self.stream_callback(chunk)
+                
+                yield chunk
+
+            # Add complete response to conversation history
+            complete_content = "".join(accumulated_content)
+            self.conversation.add_message(
+                role=MessageRole.ASSISTANT,
+                content=complete_content
+            )
+
+            # Handle routing if configured
+            if self.router and context:
+                route_decision = await self.router(complete_content, context)
+                
+                if route_decision and route_decision.route_id in self.routes:
+                    next_node = self.routes[route_decision.route_id]
+                    if route_decision.system_prompt_additions:
+                        context.system_prompt_additions.append(
+                            route_decision.system_prompt_additions
+                        )
+                    context.current_input = (
+                        route_decision.user_input_transform or context.original_input
+                    )
+                    context.metadata.update(route_decision.metadata)
+                    
+                    # Stream from next node
+                    async for next_chunk in next_node.process_stream(
+                        context.current_input, 
+                        context
+                    ):
+                        yield next_chunk
+
+            # Legacy routing
+            elif self.next_node and (not self.condition or self.condition(complete_content)):
+                async for next_chunk in self.next_node.process_stream(complete_content):
+                    yield next_chunk
+
+        except Exception as e:
+            logger.error(
+                "stream_processing_error",
+                error=str(e),
+                node_id=id(self),
+                input_length=len(str(input_data))
+            )
+            # Yield error chunk
+            yield StreamChunk(
+                content="",
+                done=True,
+                metadata={
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                    "node_id": id(self)
+                }
             )
