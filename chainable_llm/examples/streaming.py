@@ -27,17 +27,18 @@ async def stream_callback(chunk: StreamChunk):
 async def main():
     load_dotenv()
     openai_api_key = os.getenv("OPENAI_API_KEY")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
     
-    if not openai_api_key:
+    if not openai_api_key and not anthropic_api_key:
         raise ValueError("Missing API key in environment variables")
 
     # Create a streaming-enabled node
     streaming_node = LLMNode(
         name="streamer",
         llm_config=LLMConfig(
-            provider="openai",
-            api_key=openai_api_key,
-            model="gpt-4o-mini",
+            provider="anthropic",
+            api_key=anthropic_api_key,
+            model="claude-3-5-sonnet-20240620",
             streaming=StreamConfig(
                 enabled=True,
                 chunk_size=10,
