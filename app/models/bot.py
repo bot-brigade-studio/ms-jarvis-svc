@@ -51,4 +51,4 @@ class ConfigVariable(TenantSoftDeleteModel):
     config_id = Column(UUID(as_uuid=True), ForeignKey("bot_configs.id"))
     
     # Relationships
-    config = relationship("BotConfig", back_populates="config_variables")
+    config = relationship("BotConfig", back_populates="variables")

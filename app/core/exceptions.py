@@ -33,7 +33,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         Error(
             code="VALIDATION_ERROR",
             message=f"{error['msg']}",
-            field=error["loc"][-1]
+            field=str(error["loc"][-1])
         )
         for error in exc.errors()
     ]
