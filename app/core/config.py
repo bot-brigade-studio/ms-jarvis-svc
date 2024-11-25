@@ -4,13 +4,14 @@ from typing import Optional
 class Settings(BaseSettings):
     # Project Settings
     PROJECT_NAME: str
+    PROJECT_DESCRIPTION: str
     VERSION: str
     API_V1_STR: str
+    ROOT_PATH: str
 
     # Database Settings
     DATABASE_URL: str
     ENVIRONMENT: str
-    DEBUG : bool = True
 
     # API Key Providers
     OPENAI_API_KEY: str

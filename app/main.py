@@ -15,11 +15,16 @@ from app.utils.response_handler import response
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.audit import AuditLogMiddleware
 
+print("ROOT PATH", settings.ROOT_PATH)
+
 def create_application() -> FastAPI:
     application = FastAPI(
         title=settings.PROJECT_NAME,
+        description=settings.PROJECT_DESCRIPTION,
         version=settings.VERSION,
-        openapi_url=f"{settings.API_V1_STR}/openapi.json"
+        openapi_url=f"{settings.API_V1_STR}/openapi.json",
+        redirect_slashes=False,
+        docs_url=f"{settings.ROOT_PATH}/docs"
     )
 
     application.add_middleware(RequestIDMiddleware)

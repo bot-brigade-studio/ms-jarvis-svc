@@ -13,7 +13,7 @@ message=$(echo "$1" | tr ' ' '_')
 timestamp=$(date +"%Y%m%d%H%M%S")
 
 # Create migration with timestamp and modified message
-alembic revision --autogenerate -m "${timestamp}_${message}"
+alembic revision --autogenerate -m "${message}" --rev-id="${timestamp}"
 
 # Show created migration files
 echo "Created migration files:"
