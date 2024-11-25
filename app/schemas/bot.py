@@ -31,11 +31,17 @@ class BotConfigBase(BaseModel):
     is_current: bool = True
     version: int = 1
 
-class BotConfigResponse(BotConfigBase):
-    variables: List[BotConfigVariableBase]
-
 class BotCreate(BotBase):
-    config: BotConfigBase
+    pass
+
+class BotConfigCreate(BotConfigBase):
+    pass
+
+class BotConfigVariableResponse(BotConfigVariableBase, BaseSchema):
+    pass
+
+class BotConfigResponse(BotConfigBase, BaseSchema):
+    variables: List[BotConfigVariableResponse]
     
-class BotResponse(BotBase):
+class BotResponse(BotBase, BaseSchema):
     configs: List[BotConfigResponse]
