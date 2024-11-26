@@ -72,15 +72,15 @@ class BotService:
         
         return await self.bot_config_repo.get(filters={"id": config.id}, load_options=["variables"])
     
-    async def update_bot_config_is_current(self, id: UUID, is_current: bool):
+    async def update_bot_config_is_current(self, id: UUID, bot_id: UUID):
         # update all other configs to not be current
-        configs, _ = await self.bot_config_repo.get_multi(filters={"bot_id": id}, select_fields=["id"])
+        configs, _ = await self.bot_config_repo.get_multi(filters={"bot_id": bot_id}, select_fields=["id"])
         for config in configs:
             if config.id != id:
                 await self.bot_config_repo.update(config.id, {"is_current": False})
         
         # update this config to be current
-        await self.bot_config_repo.update(id, {"is_current": is_current})
+        await self.bot_config_repo.update(id, {"is_current": True})
         
     async def save_config_variables(self, config: BotConfig):
         custom_instructions = config.custom_instructions

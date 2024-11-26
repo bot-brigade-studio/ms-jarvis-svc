@@ -76,6 +76,12 @@ async def update_bot_config(id: UUID, config_id: UUID, schema: BotConfigCreate, 
     
     return response.success(data=item, message="Bot config updated successfully")
 
+@router.put("/{id}/configs/{config_id}/is-current", response_model=StandardResponse[None])
+async def update_bot_config_is_current(id: UUID, config_id: UUID, service: BotService = Depends()):
+    await service.update_bot_config_is_current(id, config_id)
+    
+    return response.success(message="Bot config is current updated successfully")
+
 @router.delete("/configs/{id}", response_model=StandardResponse[None])
 async def delete_bot_config(id: UUID, service: BotService = Depends()):
     await service.delete_bot_config(id)
