@@ -11,19 +11,20 @@ from app.db.base import Base
 from app.core.exceptions import APIError
 from app.models.base import current_tenant_id, current_user_id
 
-ModelType = TypeVar("ModelType", bound=Base) # type: ignore
+ModelType = TypeVar("ModelType", bound=Base)  # type: ignore
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
+
 
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """
     Enhanced Base Repository with support for relationships and complex queries
     """
-    
+
     def __init__(self, model: Type[ModelType], db: AsyncSession):
         self.model = model
         self.db = db
-        self.has_soft_delete = hasattr(model, 'deleted_at')
+        self.has_soft_delete = hasattr(model, "deleted_at")
 
     def _get_model_data(self, schema: Union[BaseModel, Dict[str, Any]]) -> dict:
         """Convert input schema to dictionary data"""
@@ -32,9 +33,9 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return schema
 
     async def create(
-        self, 
+        self,
         schema: Union[CreateSchemaType, Dict[str, Any]],
-        relationships: Dict[str, Any] = None
+        relationships: Dict[str, Any] = None,
     ) -> ModelType:
         """
         Create a new record with optional relationships
@@ -42,23 +43,22 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         try:
             # Convert schema to dict if it's a Pydantic model
             model_data = self._get_model_data(schema)
-            
+
             # Create model instance
             db_obj = self.model(**model_data)
-            
+
             # Handle relationships if provided
             if relationships:
                 for rel_name, rel_value in relationships.items():
                     setattr(db_obj, rel_name, rel_value)
-            
+
             self.db.add(db_obj)
             await self.db.flush()
             await self.db.refresh(db_obj)
             return db_obj
-            
+
         except Exception as e:
             await self.db.rollback()
-            raise APIError(f"Create operation failed: {str(e)}")
 
     def _build_query(
         self,
@@ -70,22 +70,75 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         load_options: List[str] = None,
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
-        with_deleted: bool = False
+        with_deleted: bool = False,
+        hidden_audit_fields: bool = True,
+        hidden_timestamp_fields: bool = True,
     ) -> Select:
         """
         Build a complex query with joins, filters, and eager loading
         """
         # Start with base query
         query = select(self.model)
-        
-        if select_fields:
-            # Convert field names to ORM attributes
-            orm_attrs = [getattr(self.model, field) for field in select_fields]
-            query = select(self.model).options(
-                load_only(*orm_attrs)
-            )
-        else:
+
+        select_fields = select_fields or []
+        if not select_fields:
+            select_fields = ["*"]
+            if hidden_audit_fields:
+                select_fields.extend(
+                    ["-created_by", "-updated_by", "-deleted_by", "-deleted_at"]
+                )
+            if hidden_timestamp_fields:
+                select_fields.extend(["-created_at", "-updated_at"])
+
+        if not select_fields:
             query = select(self.model)
+        else:
+            included_fields = []
+            excluded_fields = []
+            relation_fields = {}
+
+            for field in select_fields:
+                if field == "*":
+                    # Include all fields from main model
+                    included_fields.extend(
+                        [c.name for c in self.model.__table__.columns]
+                    )
+                elif field.startswith("-"):
+                    # Exclude specific field
+                    excluded_fields.append(field[1:])
+                elif "." in field:
+                    # Handle relationship fields
+                    relation_name, field_name = field.split(".", 1)
+                    if relation_name not in relation_fields:
+                        relation_fields[relation_name] = []
+                    relation_fields[relation_name].append(field_name)
+                else:
+                    # Regular field
+                    included_fields.append(field)
+
+            # Remove excluded fields from included fields
+            final_fields = [f for f in included_fields if f not in excluded_fields]
+
+            # Convert field names to ORM attributes for main model
+            orm_attrs = [getattr(self.model, field) for field in final_fields]
+
+            # Start query with selected fields
+            query = select(self.model).options(load_only(*orm_attrs))
+
+            # Handle relationship fields
+            for relation_name, fields in relation_fields.items():
+                relationship = getattr(self.model, relation_name)
+                # Add join for this relationship
+                query = query.join(relationship)
+                # Add eager loading with specific fields
+                query = query.options(
+                    joinedload(relationship).load_only(
+                        *[
+                            getattr(relationship.property.mapper.class_, f)
+                            for f in fields
+                        ]
+                    )
+                )
 
         # Apply joins if specified
         if joins:
@@ -97,12 +150,12 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if load_options:
             for option in load_options:
                 # Support nested relationships with dots
-                if '.' in option:
+                if "." in option:
                     # Handle nested eager loading
-                    parts = option.split('.')
+                    parts = option.split(".")
                     current_model = self.model
                     loader = None
-                    
+
                     for part in parts:
                         attr = getattr(current_model, part)
                         if loader is None:
@@ -111,7 +164,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                             loader = loader.joinedload(attr)
                         # Update current_model to the related model for next iteration
                         current_model = attr.property.mapper.class_
-                    
+
                     query = query.options(loader)
                 else:
                     attr = getattr(self.model, option)
@@ -120,25 +173,29 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if filters:
             filter_conditions = []
             for key, value in filters.items():
-                if '.' in key:
+                if "." in key:
                     # Handle relationship filtering
-                    relation_path = key.split('.')
+                    relation_path = key.split(".")
                     current_model = self.model
-                    
+
                     # Navigate through the relationships to get the final attribute
                     for i, path in enumerate(relation_path):
                         if i == len(relation_path) - 1:
                             # Last item is the actual column
-                            filter_conditions.append(getattr(current_model, path) == value)
+                            filter_conditions.append(
+                                getattr(current_model, path) == value
+                            )
                         else:
                             # Get the relationship model
-                            current_model = getattr(current_model, path).property.mapper.class_
+                            current_model = getattr(
+                                current_model, path
+                            ).property.mapper.class_
                 else:
                     if isinstance(value, list):
                         filter_conditions.append(getattr(self.model, key).in_(value))
                     else:
                         filter_conditions.append(getattr(self.model, key) == value)
-            
+
             if filter_conditions:
                 query = query.where(and_(*filter_conditions))
 
@@ -146,27 +203,29 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if search_term and search_fields:
             search_conditions = []
             for field, search_type in search_fields.items():
-                if search_type == 'exact':
+                if search_type == "exact":
                     search_conditions.append(getattr(self.model, field) == search_term)
-                elif search_type == 'contains':
-                    search_conditions.append(getattr(self.model, field).ilike(f'%{search_term}%'))
+                elif search_type == "contains":
+                    search_conditions.append(
+                        getattr(self.model, field).ilike(f"%{search_term}%")
+                    )
             if search_conditions:
                 query = query.where(or_(*search_conditions))
 
         # Apply ordering
         if order_by:
             for order_field in order_by:
-                direction = 'desc' if order_field.startswith('-') else 'asc'
-                field = order_field.lstrip('-')
-                query = query.order_by(
-                    getattr(getattr(self.model, field), direction)()
-                )
-                
-        if is_tenant_scoped and hasattr(self.model, 'tenant_id') and current_tenant_id.get():        
-            query = query.where(and_(
-                self.model.tenant_id == current_tenant_id.get()
-            ))
-        
+                direction = "desc" if order_field.startswith("-") else "asc"
+                field = order_field.lstrip("-")
+                query = query.order_by(getattr(getattr(self.model, field), direction)())
+
+        if (
+            is_tenant_scoped
+            and hasattr(self.model, "tenant_id")
+            and current_tenant_id.get()
+        ):
+            query = query.where(and_(self.model.tenant_id == current_tenant_id.get()))
+
         if not with_deleted and self.has_soft_delete:
             query = query.where(self.model.deleted_at.is_(None))
 
@@ -180,16 +239,23 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         load_options: List[str] = None,
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
-        with_deleted: bool = False
+        with_deleted: bool = False,
     ) -> Optional[ModelType]:
         """
         Get a record by ID with optional relationship loading
         """
-        
+
         if not id and not filters:
             raise ValueError("Either id or filters must be provided")
-        
-        query = self._build_query(joins=joins, load_options=load_options, select_fields=select_fields, filters=filters, is_tenant_scoped=is_tenant_scoped, with_deleted=with_deleted)
+
+        query = self._build_query(
+            joins=joins,
+            load_options=load_options,
+            select_fields=select_fields,
+            filters=filters,
+            is_tenant_scoped=is_tenant_scoped,
+            with_deleted=with_deleted,
+        )
         if id:
             query = query.where(self.model.id == id)
         result = await self.db.execute(query)
@@ -208,7 +274,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         load_options: List[str] = None,
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
-        with_deleted: bool = False
+        with_deleted: bool = False,
     ) -> Tuple[List[ModelType], int]:
         """
         Get multiple records with comprehensive querying options
@@ -220,7 +286,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             search_fields=search_fields,
             search_term=search_term,
             is_tenant_scoped=is_tenant_scoped,
-            with_deleted=with_deleted
+            with_deleted=with_deleted,
         )
         total = await self.db.scalar(count_query)
 
@@ -234,17 +300,17 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             load_options=load_options,
             select_fields=select_fields,
             is_tenant_scoped=is_tenant_scoped,
-            with_deleted=with_deleted
+            with_deleted=with_deleted,
         )
-    
+
         # Apply pagination
         query = query.offset(skip).limit(limit)
 
         # Execute query
         result = await self.db.execute(query)
-    
+
         return result.unique().scalars().all(), total
-    
+
     def _build_count_query(
         self,
         joins: List[str] = None,
@@ -252,15 +318,15 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         search_fields: Dict[str, str] = None,
         search_term: str = None,
         is_tenant_scoped: bool = False,
-        with_deleted: bool = False
+        with_deleted: bool = False,
     ) -> Select:
         """
         Build an optimized count query
         """
         # Start with simple count query
         # Check if model has an id column
-        has_id = hasattr(self.model, 'id')
-        
+        has_id = hasattr(self.model, "id")
+
         # Build appropriate count expression
         if has_id:
             # For tables with id column
@@ -270,14 +336,21 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             primary_key_columns = self.model.__table__.primary_key.columns
             if len(primary_key_columns) > 1:
                 # For composite primary keys, use distinct on all key columns
-                count_expr = func.count(distinct(
-                    tuple_(*[getattr(self.model, col.name) for col in primary_key_columns])
-                ))
+                count_expr = func.count(
+                    distinct(
+                        tuple_(
+                            *[
+                                getattr(self.model, col.name)
+                                for col in primary_key_columns
+                            ]
+                        )
+                    )
+                )
             else:
                 # For single column primary key
-                count_expr = func.count(distinct(
-                    getattr(self.model, next(iter(primary_key_columns)).name)
-                ))
+                count_expr = func.count(
+                    distinct(getattr(self.model, next(iter(primary_key_columns)).name))
+                )
 
         # Start with optimized count query
         query = select(count_expr)
@@ -292,21 +365,25 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if filters:
             filter_conditions = []
             for key, value in filters.items():
-                if '.' in key:
+                if "." in key:
                     # Handle relationship filtering
-                    relation_path = key.split('.')
+                    relation_path = key.split(".")
                     current_model = self.model
                     for i, path in enumerate(relation_path):
                         if i == len(relation_path) - 1:
-                            filter_conditions.append(getattr(current_model, path) == value)
+                            filter_conditions.append(
+                                getattr(current_model, path) == value
+                            )
                         else:
-                            current_model = getattr(current_model, path).property.mapper.class_
+                            current_model = getattr(
+                                current_model, path
+                            ).property.mapper.class_
                 else:
                     if isinstance(value, list):
                         filter_conditions.append(getattr(self.model, key).in_(value))
                     else:
                         filter_conditions.append(getattr(self.model, key) == value)
-            
+
             if filter_conditions:
                 query = query.where(and_(*filter_conditions))
 
@@ -314,17 +391,21 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if search_term and search_fields:
             search_conditions = []
             for field, search_type in search_fields.items():
-                if search_type == 'exact':
+                if search_type == "exact":
                     search_conditions.append(getattr(self.model, field) == search_term)
-                elif search_type == 'contains':
-                    search_conditions.append(getattr(self.model, field).ilike(f'%{search_term}%'))
+                elif search_type == "contains":
+                    search_conditions.append(
+                        getattr(self.model, field).ilike(f"%{search_term}%")
+                    )
             if search_conditions:
                 query = query.where(or_(*search_conditions))
-                
-        if is_tenant_scoped and hasattr(self.model, 'tenant_id') and current_tenant_id.get():        
-            query = query.where(and_(
-                self.model.tenant_id == current_tenant_id.get()
-            ))
+
+        if (
+            is_tenant_scoped
+            and hasattr(self.model, "tenant_id")
+            and current_tenant_id.get()
+        ):
+            query = query.where(and_(self.model.tenant_id == current_tenant_id.get()))
 
         if not with_deleted and self.has_soft_delete:
             query = query.where(self.model.deleted_at.is_(None))
@@ -335,7 +416,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self,
         id: UUID,
         schema: Union[UpdateSchemaType, Dict[str, Any]],
-        relationships: Dict[str, Any] = None
+        relationships: Dict[str, Any] = None,
     ) -> Optional[ModelType]:
         """
         Update a record with optional relationship updates
@@ -371,19 +452,19 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         self,
         id: Optional[UUID] = None,
         filters: Optional[Dict[str, Any]] = None,
-        force: bool = False
+        force: bool = False,
     ) -> bool:
         """
         Delete record(s) by ID or filters with optional force delete
-        
+
         Args:
             id: Optional UUID of the record to delete
             filters: Optional dictionary of filters to delete by
             force: If True, performs hard delete even for soft-deleteable models
-            
+
         Returns:
             bool: True if any records were deleted, False otherwise
-            
+
         Raises:
             APIError: If delete operation fails
             ValueError: If neither id nor filters are provided
@@ -397,7 +478,9 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if id is not None:
                 conditions.append(self.model.id == id)
             if filters:
-                conditions.extend(getattr(self.model, k) == v for k, v in filters.items())
+                conditions.extend(
+                    getattr(self.model, k) == v for k, v in filters.items()
+                )
 
             if self.has_soft_delete and not force:
                 # Soft delete
@@ -417,10 +500,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             await self.db.rollback()
             raise APIError(f"Delete operation failed: {str(e)}")
 
-    async def exists(
-        self,
-        filters: Dict[str, Any]
-    ) -> bool:
+    async def exists(self, filters: Dict[str, Any]) -> bool:
         """
         Check if records exist with given filters
         """
@@ -430,10 +510,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         )
         return result.scalar() > 0
 
-    async def count(
-        self,
-        filters: Dict[str, Any] = None
-    ) -> int:
+    async def count(self, filters: Dict[str, Any] = None) -> int:
         """
         Count records with optional filters
         """

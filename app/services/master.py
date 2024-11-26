@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.master import MstCategory, MstItem
 from app.repositories.master_repository import MstCategoryRepository, MstItemRepository
 from app.schemas.master import MstCategoryBase, MstItemBase
+import re
 
 
 class MasterService:
@@ -15,7 +16,11 @@ class MasterService:
         self.mst_category_repo = MstCategoryRepository(MstCategory, db)
         self.mst_item_repo = MstItemRepository(MstItem, db)
 
+    def _create_slug(self, name: str) -> str:
+        return re.sub(r"\s+", "-", name).lower()
+
     async def create_mst_category(self, schema: MstCategoryBase) -> MstCategory:
+        schema.slug = self._create_slug(schema.name)
         return await self.mst_category_repo.create(schema)
 
     async def update_mst_category(
@@ -27,6 +32,7 @@ class MasterService:
         if not existing:
             raise APIError(status_code=404, message="MstCategory not found")
 
+        schema.slug = self._create_slug(schema.name)
         return await self.mst_category_repo.update(id, schema)
 
     async def delete_mst_category(self, id: UUID) -> None:
@@ -45,7 +51,9 @@ class MasterService:
         self, skip: int = 0, limit: int = 10, filters: Optional[Dict[str, Any]] = None
     ) -> tuple[List[MstCategory], int]:
         return await self.mst_category_repo.get_multi(
-            skip=skip, limit=limit, filters=filters
+            skip=skip,
+            limit=limit,
+            filters=filters,
         )
 
     async def _get_category_id(self, slug: str) -> UUID:
