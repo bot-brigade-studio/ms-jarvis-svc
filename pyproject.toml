@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["anggitrestuu <123190026@student.upnyk.ac.id>"]
 readme = "README.md"
-packages = [{ include = "app" }]
+packages = [{ include = "app" }, { include = "scripts" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -29,6 +29,7 @@ anthropic = "^0.39.0"
 openai = "^1.55.0"
 tiktoken = "^0.8.0"
 async-timeout = "^5.0.1"
+typer = "^0.13.1"
 
 
 [build-system]
