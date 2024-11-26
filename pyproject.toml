@@ -30,6 +30,7 @@ openai = "^1.55.0"
 tiktoken = "^0.8.0"
 async-timeout = "^5.0.1"
 typer = "^0.13.1"
+uuid7 = "^0.1.0"
 
 
 [build-system]
