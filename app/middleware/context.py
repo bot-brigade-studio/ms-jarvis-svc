@@ -30,8 +30,9 @@ class ContextMiddleware(BaseHTTPMiddleware):
                 if request.headers.get("X-Tenant-ID"):
                     token_tenant_id = UUID(request.headers.get("X-Tenant-ID"))
             else:
-                token = request.headers.get("Authorization").split(" ")[1]
-                if token:
+                token_auth = request.headers.get("Authorization")
+                if token_auth:
+                    token = token_auth.split(" ")[1]
                     response = await self.client.get(
                         f"{self.auth_service_url}/api/v1/rbac/validate-permission",
                         headers={"Authorization": f"Bearer {token}"}
