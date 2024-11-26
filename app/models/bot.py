@@ -26,6 +26,7 @@ class Bot(TenantSoftDeleteModel):
     tagline = Column(String(255))  # eg. "Helping academics write better."
     description = Column(Text)  # eg. "This bot helps academics write better."
     greeting = Column(Text)  # eg. "Hello! How can I assist you today?"
+    category_id = Column(UUID(as_uuid=True), ForeignKey("mst_items.id"))
 
     is_bot_definition_public = Column(
         Boolean, default=False
@@ -34,6 +35,7 @@ class Bot(TenantSoftDeleteModel):
 
     # Relationships
     configs = relationship("BotConfig", back_populates="bot")
+    category = relationship("MstItem", back_populates="bot_categories")
 
 
 class BotConfig(TenantSoftDeleteModel):

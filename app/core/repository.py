@@ -59,6 +59,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         except Exception as e:
             await self.db.rollback()
+            raise APIError(f"Create operation failed: {str(e)}")
 
     def _build_query(
         self,
@@ -71,8 +72,6 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
         with_deleted: bool = False,
-        hidden_audit_fields: bool = True,
-        hidden_timestamp_fields: bool = True,
     ) -> Select:
         """
         Build a complex query with joins, filters, and eager loading
@@ -80,65 +79,12 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         # Start with base query
         query = select(self.model)
 
-        select_fields = select_fields or []
-        if not select_fields:
-            select_fields = ["*"]
-            if hidden_audit_fields:
-                select_fields.extend(
-                    ["-created_by", "-updated_by", "-deleted_by", "-deleted_at"]
-                )
-            if hidden_timestamp_fields:
-                select_fields.extend(["-created_at", "-updated_at"])
-
-        if not select_fields:
-            query = select(self.model)
-        else:
-            included_fields = []
-            excluded_fields = []
-            relation_fields = {}
-
-            for field in select_fields:
-                if field == "*":
-                    # Include all fields from main model
-                    included_fields.extend(
-                        [c.name for c in self.model.__table__.columns]
-                    )
-                elif field.startswith("-"):
-                    # Exclude specific field
-                    excluded_fields.append(field[1:])
-                elif "." in field:
-                    # Handle relationship fields
-                    relation_name, field_name = field.split(".", 1)
-                    if relation_name not in relation_fields:
-                        relation_fields[relation_name] = []
-                    relation_fields[relation_name].append(field_name)
-                else:
-                    # Regular field
-                    included_fields.append(field)
-
-            # Remove excluded fields from included fields
-            final_fields = [f for f in included_fields if f not in excluded_fields]
-
-            # Convert field names to ORM attributes for main model
-            orm_attrs = [getattr(self.model, field) for field in final_fields]
-
-            # Start query with selected fields
+        if select_fields:
+            # Convert field names to ORM attributes
+            orm_attrs = [getattr(self.model, field) for field in select_fields]
             query = select(self.model).options(load_only(*orm_attrs))
-
-            # Handle relationship fields
-            for relation_name, fields in relation_fields.items():
-                relationship = getattr(self.model, relation_name)
-                # Add join for this relationship
-                query = query.join(relationship)
-                # Add eager loading with specific fields
-                query = query.options(
-                    joinedload(relationship).load_only(
-                        *[
-                            getattr(relationship.property.mapper.class_, f)
-                            for f in fields
-                        ]
-                    )
-                )
+        else:
+            query = select(self.model)
 
         # Apply joins if specified
         if joins:
@@ -233,9 +179,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get(
         self,
-        id: Optional[UUID] = None,
-        filters: Dict[str, Any] = None,
-        joins: List[str] = None,
+        id: UUID,
         load_options: List[str] = None,
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
@@ -244,20 +188,33 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         Get a record by ID with optional relationship loading
         """
-
-        if not id and not filters:
-            raise ValueError("Either id or filters must be provided")
-
         query = self._build_query(
-            joins=joins,
             load_options=load_options,
             select_fields=select_fields,
-            filters=filters,
             is_tenant_scoped=is_tenant_scoped,
             with_deleted=with_deleted,
         )
-        if id:
-            query = query.where(self.model.id == id)
+        query = query.where(self.model.id == id)
+        result = await self.db.execute(query)
+        return result.unique().scalar_one_or_none()
+
+    async def get_by(
+        self,
+        filters: Dict[str, Any],
+        joins: List[str] = None,
+        load_options: List[str] = None,
+        select_fields: List[str] = None,
+        is_tenant_scoped: bool = False,
+        with_deleted: bool = False,
+    ) -> Optional[ModelType]:
+        query = self._build_query(
+            filters=filters,
+            joins=joins,
+            load_options=load_options,
+            select_fields=select_fields,
+            is_tenant_scoped=is_tenant_scoped,
+            with_deleted=with_deleted,
+        )
         result = await self.db.execute(query)
         return result.unique().scalar_one_or_none()
 

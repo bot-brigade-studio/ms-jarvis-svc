@@ -1,9 +1,10 @@
-
 from typing import Optional
 from app.schemas.base import BaseSchema
 from app.models.enums import StatusEnum
 from pydantic import BaseModel, Field
 from typing import List
+from uuid import UUID
+
 
 class BotBase(BaseModel):
     name: str
@@ -13,12 +14,14 @@ class BotBase(BaseModel):
     greeting: Optional[str] = None
     is_bot_definition_public: bool
     status: StatusEnum
+    category_id: Optional[UUID] = None
 
-    
+
 class BotConfigVariableBase(BaseModel):
     key: str
     value: dict
-    
+
+
 class BotConfigBase(BaseModel):
     name: str = "Default"
     model_name: str
@@ -31,17 +34,22 @@ class BotConfigBase(BaseModel):
     is_current: bool = True
     version: int = 1
 
+
 class BotCreate(BotBase):
     pass
+
 
 class BotConfigCreate(BotConfigBase):
     pass
 
+
 class BotConfigVariableResponse(BotConfigVariableBase, BaseSchema):
     pass
 
+
 class BotConfigResponse(BotConfigBase, BaseSchema):
     variables: List[BotConfigVariableResponse]
-    
+
+
 class BotResponse(BotBase, BaseSchema):
     configs: List[BotConfigResponse]
