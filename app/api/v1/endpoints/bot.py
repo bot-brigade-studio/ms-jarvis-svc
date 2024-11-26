@@ -1,8 +1,10 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
+from app.api.v1.endpoints.deps import CurrentUser, get_current_user
 from app.models.enums import StatusEnum
 from app.services.bot import BotService
 from app.schemas.bot import BotConfigCreate, BotConfigResponse, BotCreate, BotResponse
+from app.utils.debug import debug_print
 from app.utils.response_handler import response
 from app.schemas.response import StandardResponse
 from uuid import UUID
@@ -10,7 +12,9 @@ from uuid import UUID
 router = APIRouter()
 
 @router.post("", response_model=StandardResponse[BotResponse])
-async def create_bot(schema: BotCreate, service: BotService = Depends()):
+async def create_bot(schema: BotCreate, service: BotService = Depends(), current_user: CurrentUser = Depends(get_current_user)):
+    debug_print("current_user", current_user)
+    
     item = await service.create_bot(schema)
     
     return response.success(
@@ -23,8 +27,8 @@ async def get_bots(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1),
     status: Optional[StatusEnum] = Query(None),
-    service: BotService = Depends()
-):
+    service: BotService = Depends(),
+):  
     filters = {}
     if status:
         filters["status"] = status

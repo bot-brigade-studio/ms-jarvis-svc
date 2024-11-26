@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # API Key Providers
     OPENAI_API_KEY: str
     ANTHROPIC_API_KEY: str
+    
+    # Services
+    HEIMDALL_SERVICE_URL : str = "https://api-shield.botbrigade.tech/heimdall"
 
     class Config:
         env_file = ".env"
