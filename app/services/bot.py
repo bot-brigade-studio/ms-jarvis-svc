@@ -156,7 +156,9 @@ class BotService:
     async def get_bots(
         self, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = None
     ):
-        return await self.bot_repo.get_multi(skip=skip, limit=limit, filters=filters)
+        return await self.bot_repo.get_multi(
+            skip=skip, limit=limit, filters=filters, load_options=["category"]
+        )
 
     async def get_bot(self, id: UUID):
         return await self.bot_repo.get(

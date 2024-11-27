@@ -8,7 +8,7 @@ from app.core.exceptions import (
     APIError,
     api_error_handler,
     validation_error_handler,
-    sqlalchemy_error_handler
+    sqlalchemy_error_handler,
 )
 from app.api.v1.router import api_router
 from app.utils.response_handler import response
@@ -16,7 +16,6 @@ from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.audit import AuditLogMiddleware
 from app.middleware.context import ContextMiddleware
 
-print("ROOT PATH", settings.ROOT_PATH)
 
 def create_application() -> FastAPI:
     application = FastAPI(
@@ -25,7 +24,8 @@ def create_application() -> FastAPI:
         version=settings.VERSION,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
         redirect_slashes=False,
-        docs_url=f"{settings.ROOT_PATH}/docs"
+        docs_url=f"{settings.ROOT_PATH}/docs",
+        redoc_url=None,
     )
 
     application.add_middleware(RequestIDMiddleware)
@@ -48,21 +48,20 @@ def create_application() -> FastAPI:
     # Add routers
     application.include_router(api_router, prefix=settings.API_V1_STR)
 
-    @application.get("/")
+    @application.get(f"{settings.ROOT_PATH}/")
     async def root():
         return response.success(
-            data={"message": "Hello World"},
-            message="Welcome to the API"
+            data={"message": "Hello World"}, message="Welcome to the API"
         )
 
     # Add health check endpoint
-    @application.get("/health")
+    @application.get(f"{settings.ROOT_PATH}/health")
     async def health_check():
         return response.success(
-            data={"status": "healthy"},
-            message="Service is healthy"
+            data={"status": "healthy"}, message="Service is healthy"
         )
 
     return application
+
 
 app = create_application()

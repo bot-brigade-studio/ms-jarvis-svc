@@ -179,7 +179,9 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get(
         self,
-        id: UUID,
+        id: Optional[UUID] = None,
+        filters: Dict[str, Any] = None,
+        joins: List[str] = None,
         load_options: List[str] = None,
         select_fields: List[str] = None,
         is_tenant_scoped: bool = False,
@@ -188,33 +190,20 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         Get a record by ID with optional relationship loading
         """
-        query = self._build_query(
-            load_options=load_options,
-            select_fields=select_fields,
-            is_tenant_scoped=is_tenant_scoped,
-            with_deleted=with_deleted,
-        )
-        query = query.where(self.model.id == id)
-        result = await self.db.execute(query)
-        return result.unique().scalar_one_or_none()
 
-    async def get_by(
-        self,
-        filters: Dict[str, Any],
-        joins: List[str] = None,
-        load_options: List[str] = None,
-        select_fields: List[str] = None,
-        is_tenant_scoped: bool = False,
-        with_deleted: bool = False,
-    ) -> Optional[ModelType]:
+        if not id and not filters:
+            raise ValueError("Either id or filters must be provided")
+
         query = self._build_query(
-            filters=filters,
             joins=joins,
             load_options=load_options,
             select_fields=select_fields,
+            filters=filters,
             is_tenant_scoped=is_tenant_scoped,
             with_deleted=with_deleted,
         )
+        if id:
+            query = query.where(self.model.id == id)
         result = await self.db.execute(query)
         return result.unique().scalar_one_or_none()
 

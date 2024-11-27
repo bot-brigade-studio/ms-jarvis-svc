@@ -37,8 +37,16 @@ class ContextMiddleware(BaseHTTPMiddleware):
                         headers={"Authorization": f"Bearer {token}"},
                     )
                     if response.status_code == 200:
-                        token_user_id = UUID(response.json()["data"]["user_id"])
-                        token_tenant_id = UUID(response.json()["data"]["tenant_id"])
+                        if (
+                            response.json()["data"]
+                            and response.json()["data"]["user_id"]
+                        ):
+                            token_user_id = UUID(response.json()["data"]["user_id"])
+                        if (
+                            response.json()["data"]
+                            and response.json()["data"]["tenant_id"]
+                        ):
+                            token_tenant_id = UUID(response.json()["data"]["tenant_id"])
                     else:
                         logger.error(
                             f"Error in context middleware: {response.json()['message']}"
@@ -60,7 +68,9 @@ class ContextMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             logger.error(f"Error in context middleware: {str(e)}")
-            raise
+            return Response(
+                status_code=500, content={"message": "Internal Server Error"}
+            )
 
         finally:
             # Reset context di akhir request
