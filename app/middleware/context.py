@@ -1,8 +1,9 @@
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
-from app.models.base import current_user_id, current_tenant_id
-from typing import Optional
+from app.core.exceptions import APIError
+from app.models.base import current_user_id, current_tenant_id, current_bearer_token
+from typing import Optional, Tuple
 from uuid import UUID
 from app.core.logging import logger
 from app.core.config import settings
@@ -10,72 +11,105 @@ import httpx
 
 
 class ContextMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app):  # Accept the app parameter
-        super().__init__(app)  # Pass it to the superclass
+    """Middleware to handle user and tenant context for requests."""
+
+    def __init__(self, app) -> None:
+        super().__init__(app)
         self.auth_service_url = settings.HEIMDALL_SERVICE_URL
         self.client = httpx.AsyncClient()
+
+    async def _validate_token(
+        self, token: str
+    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+        """
+        Validate bearer token and extract user/tenant IDs.
+
+        Returns:
+            Tuple of (user_id, tenant_id)
+        """
+        try:
+            response = await self.client.get(
+                f"{self.auth_service_url}/api/v1/rbac/validate-permission",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Token validation failed: {response.json().get('message')}"
+                )
+                return None, None
+
+            data = response.json().get("data", {})
+            user_id = UUID(data["user_id"]) if data.get("user_id") else None
+            tenant_id = UUID(data["tenant_id"]) if data.get("tenant_id") else None
+
+            return user_id, tenant_id
+
+        except Exception as e:
+            logger.error(f"Token validation error: {str(e)}")
+            return None, None
+
+    async def _get_context_ids(
+        self, request: Request
+    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+        """Extract user and tenant IDs from request based on environment."""
+        if settings.ENVIRONMENT == "production":
+            return (
+                (
+                    UUID(request.headers["X-User-ID"])
+                    if request.headers.get("X-User-ID")
+                    else None
+                ),
+                (
+                    UUID(request.headers["X-Tenant-ID"])
+                    if request.headers.get("X-Tenant-ID")
+                    else None
+                ),
+            )
+
+        # Non-production environment: validate bearer token
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return None, None
+
+        token = auth_header.split(" ")[1]
+        current_bearer_token.set(token)
+        return await self._validate_token(token)
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        # Reset context di awal request
-        token_user_id: Optional[UUID] = None
-        token_tenant_id: Optional[UUID] = None
-
+        """Process the request and handle context management."""
         try:
-            if settings.ENVIRONMENT == "production":
-                if request.headers.get("X-User-ID"):
-                    token_user_id = UUID(request.headers.get("X-User-ID"))
-                if request.headers.get("X-Tenant-ID"):
-                    token_tenant_id = UUID(request.headers.get("X-Tenant-ID"))
-            else:
-                token_auth = request.headers.get("Authorization")
-                if token_auth:
-                    token = token_auth.split(" ")[1]
-                    response = await self.client.get(
-                        f"{self.auth_service_url}/api/v1/rbac/validate-permission",
-                        headers={"Authorization": f"Bearer {token}"},
-                    )
-                    if response.status_code == 200:
-                        if (
-                            response.json()["data"]
-                            and response.json()["data"]["user_id"]
-                        ):
-                            token_user_id = UUID(response.json()["data"]["user_id"])
-                        if (
-                            response.json()["data"]
-                            and response.json()["data"]["tenant_id"]
-                        ):
-                            token_tenant_id = UUID(response.json()["data"]["tenant_id"])
-                    else:
-                        logger.error(
-                            f"Error in context middleware: {response.json()['message']}"
-                        )
+            # Get context IDs
+            user_id, tenant_id = await self._get_context_ids(request)
 
             # Set context variables
-            if token_user_id:
-                current_user_id.set(token_user_id)
-            if token_tenant_id:
-                current_tenant_id.set(token_tenant_id)
+            current_user_id.set(user_id)
+            current_tenant_id.set(tenant_id)
 
             # Process request
             response = await call_next(request)
 
-            response.headers["X-User-ID"] = str(token_user_id)
-            response.headers["X-Tenant-ID"] = str(token_tenant_id)
+            # Set response headers
+            response.headers["X-User-ID"] = str(user_id) if user_id else ""
+            response.headers["X-Tenant-ID"] = str(tenant_id) if tenant_id else ""
 
             return response
 
         except Exception as e:
-            logger.error(f"Error in context middleware: {str(e)}")
-            return Response(
-                status_code=500, content={"message": "Internal Server Error"}
-            )
+            logger.error(f"Context middleware error: {str(e)}")
+            raise APIError(message="Internal Server Error", status_code=500)
 
         finally:
-            # Reset context di akhir request
-            try:
-                current_user_id.set(None)
-                current_tenant_id.set(None)
-            except Exception as e:
-                logger.error(f"Error resetting context: {str(e)}")
+            # Reset context
+            self._reset_context()
+
+    def _reset_context(self) -> None:
+        """Reset all context variables."""
+        try:
+            current_user_id.set(None)
+            current_tenant_id.set(None)
+            current_bearer_token.set(None)
+        except Exception as e:
+            logger.error(f"Error resetting context: {str(e)}")

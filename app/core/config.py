@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     # Services
     HEIMDALL_SERVICE_URL: str = "https://api-shield.botbrigade.tech/heimdall"
+    SANCTUM_SERVICE_URL: str = "https://api-shield.botbrigade.tech/sanctum"
+
+    # S3
+    BUCKET_NAME: str = "jarvis-service-bucket"
 
     class Config:
         env_file = ".env"

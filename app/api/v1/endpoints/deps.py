@@ -1,11 +1,10 @@
 # local_s3/api/deps.py
 from uuid import UUID
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import httpx
 from pydantic import BaseModel
 from app.core.config import settings
-from app.utils.debug import debug_print
 from app.models.base import current_user_id, current_tenant_id
 from app.core.logging import logger
 
