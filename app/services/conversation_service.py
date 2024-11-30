@@ -4,6 +4,7 @@ from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest
+from app.utils.debug import debug_print
 from app.utils.http_client import NexusClient
 from app.core.config import settings
 from app.models.bot import Bot, BotConfig
@@ -87,6 +88,11 @@ class ConversationService:
 
         llm = self._initialize_llm(api_key, provider, config, system_message)
 
+        for message in formatted_history[:-1]:
+            llm.conversation.add_message(
+                role=message["role"], content=message["content"]
+            )
+
         async for chunk in llm.process_stream(schema.content):
             if chunk.content:
                 accumulated_content.append(chunk.content)
@@ -94,9 +100,11 @@ class ConversationService:
 
             if chunk.done:
                 full_content = "".join(accumulated_content)
+                debug_print("full_content", full_content)
                 await self._post_assistant_message(
                     thread_id, assistant_msg_id, full_content, user_msg_id
                 )
+                await self.db.commit()
 
     def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
         """Retrieve API key and provider based on model name."""
