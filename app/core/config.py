@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Services
     HEIMDALL_SERVICE_URL: str = "https://api-shield.botbrigade.tech/heimdall"
     SANCTUM_SERVICE_URL: str = "https://api-shield.botbrigade.tech/sanctum"
-
+    NEXUS_SERVICE_URL: str = "https://api-shield.botbrigade.tech/nexus"
     # S3
     BUCKET_NAME: str = "jarvis-service-bucket"
 
