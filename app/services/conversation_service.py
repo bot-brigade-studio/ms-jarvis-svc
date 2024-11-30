@@ -1,14 +1,11 @@
-import json
 from typing import AsyncIterator, List, Optional, Dict, Any, Union, Tuple
 from uuid import UUID
-from fastapi import HTTPException
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest
 from app.utils.http_client import NexusClient
 from app.core.config import settings
-from app.utils.debug import debug_print
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
 from app.core.exceptions import APIError
@@ -20,7 +17,6 @@ from chainable_llm.core.types import (
     StreamConfig,
 )
 from chainable_llm.nodes.base import LLMNode
-from app.core.exceptions import APIError
 from uuid_extensions import uuid7
 
 
@@ -38,7 +34,7 @@ class ConversationService:
         schema: CreateMessageRequest,
         stream: bool = True,
     ):
-        debug_print("schema", schema)
+        """Process a user message and handle streaming response."""
         if not stream:
             raise APIError(
                 status_code=405,
@@ -48,21 +44,9 @@ class ConversationService:
         config = await self._get_bot_config(bot_id)
         api_key, provider = self._get_api_key_and_provider(config.model_name)
 
-        payload = {
-            "content": schema.content,
-            "role": "user",
-            "id": schema.id if schema.id else str(uuid7()),
-            "parent_id": schema.parent_id if schema.parent_id else None,
-            "status": "completed",
-        }
+        payload = self._create_payload(schema)
 
-        debug_print("payload", payload)
-        res = await self.nexus_client.post(
-            f"api/v1/messages/{thread_id}",
-            json=payload,
-        )
-        user_message = res.json()["data"]
-
+        user_message = await self._post_user_message(thread_id, payload)
         formatted_history = await self._get_formatted_history(
             thread_id=thread_id,
             branch_id=user_message["branch_id"],
@@ -81,7 +65,7 @@ class ConversationService:
         )
 
     async def stream_callback(chunk: StreamChunk, **kwargs):
-        """Simple callback to print streaming chunks"""
+        """Simple callback to print streaming chunks."""
         print(f"{chunk.content}", end="", flush=True)
         if chunk.done:
             print("\n--- Stream completed ---\n")
@@ -97,25 +81,11 @@ class ConversationService:
         assistant_msg_id: str,
         formatted_history: List[Dict[str, str]],
     ) -> Union[Dict[str, Any], AsyncIterator[StreamChunk]]:
+        """Handle the streaming response from the LLM."""
         accumulated_content = []
-
         system_message = config.custom_instructions
 
-        llm = LLMNode(
-            llm_config=LLMConfig(
-                provider=provider,
-                api_key=api_key,
-                model=config.model_name,
-                temperature=config.temperature,
-                max_tokens=config.max_output_tokens,
-                streaming=StreamConfig(enabled=True, chunk_size=10),
-            ),
-            prompt_config=PromptConfig(
-                input_type=InputType.USER_PROMPT,
-                base_system_prompt=system_message,
-                template="{input}",
-            ),
-        )
+        llm = self._initialize_llm(api_key, provider, config, system_message)
 
         async for chunk in llm.process_stream(schema.content):
             if chunk.content:
@@ -124,19 +94,12 @@ class ConversationService:
 
             if chunk.done:
                 full_content = "".join(accumulated_content)
-
-                await self.nexus_client.post(
-                    f"api/v1/messages/{thread_id}",
-                    json={
-                        "id": assistant_msg_id,
-                        "content": full_content,
-                        "status": "completed",
-                        "parent_id": user_msg_id,
-                        "role": "assistant",
-                    },
+                await self._post_assistant_message(
+                    thread_id, assistant_msg_id, full_content, user_msg_id
                 )
 
     def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
+        """Retrieve API key and provider based on model name."""
         openai_models = [
             "gpt-4o",
             "gpt-4o-mini",
@@ -162,7 +125,7 @@ class ConversationService:
     async def _get_formatted_history(
         self, thread_id: UUID, branch_id, last_message_id: Optional[UUID] = None
     ) -> List[Dict[str, str]]:
-        """Get formatted conversation history for LLM"""
+        """Get formatted conversation history for LLM."""
         res = await self.nexus_client.get(
             f"api/v1/messages/{thread_id}",
             params={
@@ -177,6 +140,7 @@ class ConversationService:
         ]
 
     async def _get_bot_config(self, bot_id: UUID) -> BotConfig:
+        """Retrieve the bot configuration."""
         bot = await self.bot_repo.get(filters={"id": bot_id}, select_fields=["id"])
         if not bot:
             raise APIError(status_code=404, message="Bot not found")
@@ -191,3 +155,58 @@ class ConversationService:
             raise APIError(status_code=404, message="Bot config not found")
 
         return config
+
+    def _create_payload(self, schema: CreateMessageRequest) -> Dict[str, Any]:
+        """Create payload for user message."""
+        return {
+            "content": schema.content,
+            "role": "user",
+            "id": schema.id if schema.id else str(uuid7()),
+            "parent_id": schema.parent_id if schema.parent_id else None,
+            "status": "completed",
+        }
+
+    async def _post_user_message(
+        self, thread_id: UUID, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Post user message to the server."""
+        res = await self.nexus_client.post(
+            f"api/v1/messages/{thread_id}",
+            json=payload,
+        )
+        return res.json()["data"]
+
+    async def _post_assistant_message(
+        self, thread_id: UUID, assistant_msg_id: str, content: str, user_msg_id: str
+    ):
+        """Post assistant message to the server."""
+        await self.nexus_client.post(
+            f"api/v1/messages/{thread_id}",
+            json={
+                "id": assistant_msg_id,
+                "content": content,
+                "status": "completed",
+                "parent_id": user_msg_id,
+                "role": "assistant",
+            },
+        )
+
+    def _initialize_llm(
+        self, api_key: str, provider: str, config: BotConfig, system_message: str
+    ) -> LLMNode:
+        """Initialize the LLM node."""
+        return LLMNode(
+            llm_config=LLMConfig(
+                provider=provider,
+                api_key=api_key,
+                model=config.model_name,
+                temperature=config.temperature,
+                max_tokens=config.max_output_tokens,
+                streaming=StreamConfig(enabled=True, chunk_size=10),
+            ),
+            prompt_config=PromptConfig(
+                input_type=InputType.USER_PROMPT,
+                base_system_prompt=system_message,
+                template="{input}",
+            ),
+        )
