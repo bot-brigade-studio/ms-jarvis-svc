@@ -27,14 +27,6 @@ async def create_user_message(
     service: ConversationService = Depends(),
 ):
     try:
-        # await service.process_user_message(
-        #     bot_id=bot_id,
-        #     thread_id=thread_id,
-        #     schema=schema,
-        #     stream=True,
-        # )
-
-        # return response.success(message="Message created successfully")
 
         async def event_generator():
             stream_iterator = await service.process_user_message(
@@ -53,6 +45,25 @@ async def create_user_message(
         return EventSourceResponse(event_generator())
     except Exception as e:
         raise APIError(message=str(e), status_code=500)
+
+
+@router.get("/{bot_id}/thread/{thread_id}/messages")
+async def get_messages(
+    bot_id: UUID,
+    thread_id: UUID,
+    skip: int = 0,
+    limit: int = 10,
+    nexus_client: NexusClient = Depends(),
+):
+    messages = await nexus_client.get(
+        f"api/v1/messages/{thread_id}",
+        params={"skip": skip, "limit": limit, "group_by": str(bot_id)},
+    )
+
+    return response.success(
+        data=messages.json().get("data"),
+        message="Messages fetched successfully",
+    )
 
 
 @router.post("/{bot_id}/thread")
