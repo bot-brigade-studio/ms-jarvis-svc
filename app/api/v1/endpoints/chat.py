@@ -1,12 +1,58 @@
+import json
+from typing import Any
 from uuid import UUID
 from fastapi import APIRouter, Depends
 from app.api.v1.endpoints.deps import CurrentUser, get_current_user
-from app.schemas.chat import CreateThreadRequest
+from app.schemas.chat import CreateMessageRequest, CreateThreadRequest
+from app.services.conversation_service import ConversationService
 from app.utils.debug import debug_print
 from app.utils.http_client import NexusClient
 from app.utils.response_handler import response
+from chainable_llm.core.types import StreamChunk
+from sse_starlette import EventSourceResponse
+from app.core.exceptions import APIError
 
 router = APIRouter()
+
+
+@router.post(
+    "/{bot_id}/thread/{thread_id}/messages",
+    response_model=Any,
+)
+async def create_user_message(
+    bot_id: UUID,
+    thread_id: UUID,
+    schema: CreateMessageRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ConversationService = Depends(),
+):
+    try:
+        # await service.process_user_message(
+        #     bot_id=bot_id,
+        #     thread_id=thread_id,
+        #     schema=schema,
+        #     stream=True,
+        # )
+
+        # return response.success(message="Message created successfully")
+
+        async def event_generator():
+            stream_iterator = await service.process_user_message(
+                bot_id=bot_id,
+                thread_id=thread_id,
+                schema=schema,
+                stream=True,
+            )
+
+            async for token in stream_iterator:
+                if isinstance(token, StreamChunk):
+                    yield format_sse_data(json.dumps(token.model_dump()))
+                else:
+                    yield format_sse_data(json.dumps({"content": str(token)}))
+
+        return EventSourceResponse(event_generator())
+    except Exception as e:
+        raise APIError(message=str(e), status_code=500)
 
 
 @router.post("/{bot_id}/thread")
@@ -46,3 +92,8 @@ async def get_thread(
 
     item = res.json()
     return response.success(data=item.get("data"))
+
+
+def format_sse_data(data: str) -> str:
+    """Format data for Server-Sent Events"""
+    return f"data: {data}\n\n"

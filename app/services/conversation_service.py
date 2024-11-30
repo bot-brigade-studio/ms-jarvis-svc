@@ -1,36 +1,180 @@
+import json
 from typing import AsyncIterator, List, Optional, Dict, Any, Union, Tuple
 from uuid import UUID
 from fastapi import HTTPException
+from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_db
+from app.schemas.chat import CreateMessageRequest
 from app.utils.http_client import NexusClient
 from app.core.config import settings
 from app.utils.debug import debug_print
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
 from app.core.exceptions import APIError
-from chainable_llm.core.types import StreamChunk
+from chainable_llm.core.types import (
+    InputType,
+    LLMConfig,
+    PromptConfig,
+    StreamChunk,
+    StreamConfig,
+)
 from chainable_llm.nodes.base import LLMNode
+from app.core.exceptions import APIError
+from uuid_extensions import uuid7
 
 
 class ConversationService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession = Depends(get_db)):
         self.db = db
         self.bot_repo = BotRepository(Bot, db)
         self.bot_config_repo = BotConfigRepository(BotConfig, db)
         self.nexus_client = NexusClient()
-        self.llm_node = LLMNode()
 
     async def process_user_message(
         self,
+        bot_id: UUID,
         thread_id: UUID,
-        content: str,
-        model_name: Optional[str] = None,
-        stream: bool = False,
-        parent_id: Optional[UUID] = None,
-        id: Optional[UUID] = None,
-        response_id: Optional[UUID] = None,
+        schema: CreateMessageRequest,
+        stream: bool = True,
+    ):
+        debug_print("schema", schema)
+        if not stream:
+            raise APIError(
+                status_code=405,
+                message="Non-streaming responses are not implemented yet",
+            )
+
+        config = await self._get_bot_config(bot_id)
+        api_key, provider = self._get_api_key_and_provider(config.model_name)
+
+        payload = {
+            "content": schema.content,
+            "role": "user",
+            "id": schema.id if schema.id else str(uuid7()),
+            "parent_id": schema.parent_id if schema.parent_id else None,
+            "status": "completed",
+        }
+
+        debug_print("payload", payload)
+        res = await self.nexus_client.post(
+            f"api/v1/messages/{thread_id}",
+            json=payload,
+        )
+        user_message = res.json()["data"]
+
+        formatted_history = await self._get_formatted_history(
+            thread_id=thread_id,
+            branch_id=user_message["branch_id"],
+            last_message_id=user_message["id"],
+        )
+
+        return self._handle_streaming_response(
+            schema=schema,
+            api_key=api_key,
+            provider=provider,
+            config=config,
+            user_msg_id=user_message["id"],
+            thread_id=thread_id,
+            assistant_msg_id=schema.response_id,
+            formatted_history=formatted_history,
+        )
+
+    async def stream_callback(chunk: StreamChunk, **kwargs):
+        """Simple callback to print streaming chunks"""
+        print(f"{chunk.content}", end="", flush=True)
+        if chunk.done:
+            print("\n--- Stream completed ---\n")
+
+    async def _handle_streaming_response(
+        self,
+        schema: CreateMessageRequest,
+        api_key: str,
+        provider: str,
+        config: BotConfig,
+        thread_id: UUID,
+        user_msg_id: str,
+        assistant_msg_id: str,
+        formatted_history: List[Dict[str, str]],
     ) -> Union[Dict[str, Any], AsyncIterator[StreamChunk]]:
-        pass
+        accumulated_content = []
+
+        system_message = config.custom_instructions
+
+        llm = LLMNode(
+            llm_config=LLMConfig(
+                provider=provider,
+                api_key=api_key,
+                model=config.model_name,
+                temperature=config.temperature,
+                max_tokens=config.max_output_tokens,
+                streaming=StreamConfig(enabled=True, chunk_size=10),
+            ),
+            prompt_config=PromptConfig(
+                input_type=InputType.USER_PROMPT,
+                base_system_prompt=system_message,
+                template="{input}",
+            ),
+        )
+
+        async for chunk in llm.process_stream(schema.content):
+            if chunk.content:
+                accumulated_content.append(chunk.content)
+            yield chunk
+
+            if chunk.done:
+                full_content = "".join(accumulated_content)
+
+                await self.nexus_client.post(
+                    f"api/v1/messages/{thread_id}",
+                    json={
+                        "id": assistant_msg_id,
+                        "content": full_content,
+                        "status": "completed",
+                        "parent_id": user_msg_id,
+                        "role": "assistant",
+                    },
+                )
+
+    def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
+        openai_models = [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo",
+        ]
+        anthropic_models = [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-sonnet-20240620",
+            "claude-3-haiku-20240307",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+        ]
+
+        if model_name in openai_models:
+            return settings.OPENAI_API_KEY, "openai"
+        elif model_name in anthropic_models:
+            return settings.ANTHROPIC_API_KEY, "anthropic"
+        else:
+            raise APIError(status_code=400, message="Invalid model name")
+
+    async def _get_formatted_history(
+        self, thread_id: UUID, branch_id, last_message_id: Optional[UUID] = None
+    ) -> List[Dict[str, str]]:
+        """Get formatted conversation history for LLM"""
+        res = await self.nexus_client.get(
+            f"api/v1/messages/{thread_id}",
+            params={
+                "last_message_id": last_message_id,
+                "branch_id": branch_id,
+            },
+        )
+        messages = res.json()["data"]
+        return [
+            {"role": message["role"], "content": message["content"]}
+            for message in messages
+        ]
 
     async def _get_bot_config(self, bot_id: UUID) -> BotConfig:
         bot = await self.bot_repo.get(filters={"id": bot_id}, select_fields=["id"])
@@ -42,7 +186,6 @@ class ConversationService:
                 "bot_id": bot_id,
                 "is_current": True,
             },
-            select_fields=["id"],
         )
         if not config:
             raise APIError(status_code=404, message="Bot config not found")

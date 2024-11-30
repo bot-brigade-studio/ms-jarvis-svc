@@ -1,8 +1,8 @@
 from typing import AsyncIterator, Awaitable, Optional, Callable, Any, Dict
 
-from core.streaming import StreamBuffer
-from transformers.base import DataTransformer
-from core.types import (
+from chainable_llm.core.streaming import StreamBuffer
+from chainable_llm.transformers.base import DataTransformer
+from chainable_llm.core.types import (
     LLMConfig,
     NodeContext,
     PromptConfig,
@@ -13,8 +13,8 @@ from core.types import (
     RouteDecision,
     StreamChunk,
 )
-from llm.factory import LLMFactory
-from core.logging import logger
+from chainable_llm.llm.factory import LLMFactory
+from chainable_llm.core.logging import logger
 
 
 class LLMNode:

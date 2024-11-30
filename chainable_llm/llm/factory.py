@@ -1,14 +1,15 @@
 from typing import Dict, Type
-from llm.base import BaseLLMProvider
-from llm.openai import OpenAIProvider
-from llm.anthropic import AnthropicProvider
-from core.types import LLMConfig
-from core.exceptions import ChainConfigError
+from chainable_llm.llm.base import BaseLLMProvider
+from chainable_llm.llm.openai import OpenAIProvider
+from chainable_llm.llm.anthropic import AnthropicProvider
+from chainable_llm.core.types import LLMConfig
+from chainable_llm.core.exceptions import ChainConfigError
+
 
 class LLMFactory:
     _providers: Dict[str, Type[BaseLLMProvider]] = {
         "openai": OpenAIProvider,
-        "anthropic": AnthropicProvider
+        "anthropic": AnthropicProvider,
     }
 
     @classmethod

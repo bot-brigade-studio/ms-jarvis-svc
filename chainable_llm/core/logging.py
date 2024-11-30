@@ -3,6 +3,7 @@ from typing import Any
 
 logger = structlog.get_logger()
 
+
 def log_error(error: Exception, context: dict[str, Any] = None):
     logger.error(
         "error_occurred",
@@ -11,18 +12,15 @@ def log_error(error: Exception, context: dict[str, Any] = None):
         **context or {}
     )
 
+
 def log_llm_request(provider: str, model: str, tokens: int, **kwargs):
-    logger.info(
-        "llm_request",
-        provider=provider,
-        model=model,
-        tokens=tokens,
-        **kwargs
-    )
-    
+    logger.info("llm_request", provider=provider, model=model, tokens=tokens, **kwargs)
+
+
 def log_any(message: str, **kwargs):
     logger.info(message, **kwargs)
-    
+
+
 def log_stream_chunk(provider: str, chunk_size: int, is_final: bool, **kwargs):
     pass
     # logger.debug(

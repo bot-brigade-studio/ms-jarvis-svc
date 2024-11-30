@@ -1,7 +1,8 @@
 import json
 from typing import Any
-from transformers.base import DataTransformer
-from core.exceptions import TransformerError
+from chainable_llm.transformers.base import DataTransformer
+from chainable_llm.core.exceptions import TransformerError
+
 
 class JSONTransformer(DataTransformer):
     async def transform(self, data: Any) -> str:
@@ -13,6 +14,7 @@ class JSONTransformer(DataTransformer):
             return json.dumps(data, ensure_ascii=False)
         except Exception as e:
             raise TransformerError(f"JSON transformation error: {str(e)}")
+
 
 class TextNormalizer(DataTransformer):
     async def transform(self, data: Any) -> str:

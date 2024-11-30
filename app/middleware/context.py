@@ -87,9 +87,9 @@ class ContextMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception as e:
-            logger.error(f"Context middleware error: {str(e)}")
-            raise APIError(message="Internal Server Error", status_code=500)
+        # except Exception as e:
+        #     logger.error(f"Context middleware error: {str(e)}")
+        #     raise APIError(message="Internal Server Error", status_code=500)
 
         finally:
             # Reset context

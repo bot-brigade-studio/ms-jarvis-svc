@@ -5,16 +5,14 @@
 
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 from dotenv import load_dotenv
-from core.types import (
-    LLMConfig, 
-    PromptConfig, 
-    InputType
-)
-from nodes.base import LLMNode
-from transformers.implementations import TextNormalizer
+from chainable_llm.core.types import LLMConfig, PromptConfig, InputType
+from chainable_llm.nodes.base import LLMNode
+from chainable_llm.transformers.implementations import TextNormalizer
+
 
 async def main():
     # Load environment variables
@@ -35,49 +33,52 @@ async def main():
                 api_key=anthropic_key,
                 model="claude-3-5-sonnet-20240620",
                 temperature=0.3,
-                max_tokens=1000  # Specify reasonable max_tokens
+                max_tokens=1000,  # Specify reasonable max_tokens
             ),
             prompt_config=PromptConfig(
                 input_type=InputType.USER_PROMPT,
-                base_system_prompt="You are a precise summarizer.",
-                template="Summarize this text in 2-3 sentences: {input}"
+                base_system_prompt="You are helpful assistant.",
+                template="{input}",
             ),
-            transformer=TextNormalizer()
+            transformer=TextNormalizer(),
         )
 
-        # Create an analysis node
+        # # Create an analysis node
         analyzer = LLMNode(
             llm_config=LLMConfig(
                 provider="openai",
                 api_key=openai_key,
                 model="gpt-4o-mini",
                 temperature=0.7,
-                max_tokens=1000  # Specify reasonable max_tokens
+                max_tokens=1000,
             ),
             prompt_config=PromptConfig(
                 input_type=InputType.USER_PROMPT,
                 base_system_prompt="You are an insightful analyst.",
-                template="Analyze the key points in this text: {input}"
+                template="{input}",
             ),
-            next_node=summarizer
+            transformer=TextNormalizer(),
+            stream_callback=stream_callback,
         )
 
         # Test input
         test_input = """
-        Artificial Intelligence has transformed various industries in recent years.
-        Machine learning algorithms are becoming increasingly sophisticated, enabling
-        applications from autonomous vehicles to medical diagnosis. The impact on
-        society has been profound, raising both opportunities and ethical concerns.
+        Selamat pagi, apa kabar?
         """
 
-        # Process the chain
-        result = await analyzer.process(test_input)
+        # stream
+        stream_callback = lambda chunk: print(chunk.content)
 
-        # Print results
-        print("\nInput Text:")
-        print(test_input)
-        print("\nFinal Result:")
-        print(result.content)
+        await analyzer.process(test_input, stream_callback=stream_callback)
+
+        # Process the chain
+        # result = await analyzer.process(test_input)
+
+        # # Print results
+        # print("\nInput Text:")
+        # print(test_input)
+        # print("\nFinal Result:")
+        # print(result.content)
 
         # if result.error:
         #     print("\nError occurred:", result.error)
@@ -93,6 +94,7 @@ async def main():
 
     except Exception as e:
         print(f"Error: {str(e)}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

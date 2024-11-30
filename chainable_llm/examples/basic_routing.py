@@ -1,12 +1,14 @@
 # examples/basic_routing.py
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
 from dotenv import load_dotenv
-from core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
-from nodes.base import LLMNode
+from chainable_llm.core.types import InputType, LLMConfig, NodeContext, PromptConfig, RouteDecision
+from chainable_llm.nodes.base import LLMNode
+
 
 async def create_smart_flow():
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -17,31 +19,25 @@ async def create_smart_flow():
     creative_node = LLMNode(
         name="creative",
         llm_config=LLMConfig(
-            provider="openai",
-            api_key=openai_api_key,
-            model="gpt-4",
-            temperature=0.9
+            provider="openai", api_key=openai_api_key, model="gpt-4", temperature=0.9
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
             template="Create creative content for: {input}",
-            base_system_prompt="You are a creative writer focused on engaging content."
-        )
+            base_system_prompt="You are a creative writer focused on engaging content.",
+        ),
     )
 
     analytical_node = LLMNode(
         name="analytical",
         llm_config=LLMConfig(
-            provider="openai",
-            api_key=openai_api_key,
-            model="gpt-4",
-            temperature=0.3
+            provider="openai", api_key=openai_api_key, model="gpt-4", temperature=0.3
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
             template="Perform detailed analysis of: {input}",
-            base_system_prompt="You are an analytical expert focused on deep insights."
-        )
+            base_system_prompt="You are an analytical expert focused on deep insights.",
+        ),
     )
 
     factual_node = LLMNode(
@@ -50,12 +46,12 @@ async def create_smart_flow():
             provider="openai",
             api_key=openai_api_key,
             model="gpt-3.5-turbo",
-            temperature=0.1
+            temperature=0.1,
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
             template="Verify and provide factual information about: {input}",
-            base_system_prompt="You are a fact checker focused on accuracy."
+            base_system_prompt="You are a fact checker focused on accuracy.",
         ),
     )
 
@@ -63,10 +59,7 @@ async def create_smart_flow():
     routing_node = LLMNode(
         name="router",
         llm_config=LLMConfig(
-            provider="openai",
-            api_key=openai_api_key,
-            model="gpt-4",
-            temperature=0.1
+            provider="openai", api_key=openai_api_key, model="gpt-4", temperature=0.1
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
@@ -90,37 +83,41 @@ async def create_smart_flow():
                 "guidance": "specific instructions for handling node"
             }
             """,
-            template="Analyze and route this query: {input}"
+            template="Analyze and route this query: {input}",
         ),
         routes={
             "to_creative": creative_node,
             "to_analytical": analytical_node,
-            "to_factual": factual_node
-        }
+            "to_factual": factual_node,
+        },
     )
 
-    async def parse_routing_response(content: str, context: NodeContext) -> RouteDecision:
+    async def parse_routing_response(
+        content: str, context: NodeContext
+    ) -> RouteDecision:
         """Parse LLM response and convert to RouteDecision"""
         try:
             clean_content = content.strip()
             if clean_content.startswith("```json"):
                 clean_content = clean_content.replace("```json", "").replace("```", "")
-            
+
             decision = json.loads(clean_content)
-            
+
             print(f"Routing decision: {decision}")
-            
+
             # Create system prompt addition from the guidance
-            system_prompt_addition = f"Additional context: {decision.get('guidance', '')}"
-            
+            system_prompt_addition = (
+                f"Additional context: {decision.get('guidance', '')}"
+            )
+
             return RouteDecision(
                 route_id=decision["route_id"],
                 system_prompt_additions=system_prompt_addition,
                 metadata={
                     "reason": decision["reason"],
                     "priority": decision["priority"],
-                    "guidance": decision["guidance"]
-                }
+                    "guidance": decision["guidance"],
+                },
             )
         except Exception as e:
             print(f"Error in routing: {e}")
@@ -131,10 +128,11 @@ async def create_smart_flow():
 
     return routing_node
 
+
 async def main():
     load_dotenv()
     flow = await create_smart_flow()
-    
+
     # Test cases
     test_cases = [
         # "Write a story about a magical forest",
@@ -144,18 +142,18 @@ async def main():
         # "Explain quantum computing principles",
         # "Verify these historical dates and events"
     ]
-    
+
     for query in test_cases:
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print(f"Processing query: {query}")
-        
+
         try:
             # Process the query
             response = await flow.process(query)
-            
+
             print("\nFinal Response:")
             print(response.content)
-            
+
             # Print routing decision
             if response.route_decision and response.route_decision.metadata:
                 print("\nRouting Decision:")
@@ -163,13 +161,15 @@ async def main():
                 print(f"Reason: {response.route_decision.metadata.get('reason')}")
                 print(f"Priority: {response.route_decision.metadata.get('priority')}")
                 print(f"Guidance: {response.route_decision.metadata.get('guidance')}")
-            
+
         except Exception as e:
             print(f"Error processing query: {e}")
-        
+
         # Reset conversations after each query
         await flow.reset_conversation()
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())
