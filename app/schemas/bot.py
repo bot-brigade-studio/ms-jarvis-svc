@@ -35,12 +35,12 @@ class BotConfigBase(BaseModel):
     version: int = 1
 
 
-class BotCreate(BotBase):
-    pass
-
-
 class BotConfigCreate(BotConfigBase):
     pass
+
+
+class BotCreate(BotBase):
+    configs: Optional[List[BotConfigCreate]] = None
 
 
 class BotConfigVariableResponse(BotConfigVariableBase, BaseSchema):

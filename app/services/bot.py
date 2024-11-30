@@ -42,7 +42,13 @@ class BotService:
         if schema.category_id:
             await self._validate_category(schema.category_id)
 
-        bot = await self.bot_repo.create(schema)
+        schema_bot = schema.model_dump(exclude={"configs"})
+        bot = await self.bot_repo.create(schema_bot)
+
+        schema_configs = schema.configs
+        if schema_configs:
+            for config in schema_configs:
+                await self.create_bot_config(bot.id, config)
 
         return await self.bot_repo.get(
             filters={"id": bot.id}, load_options=["configs.variables"]
@@ -63,7 +69,17 @@ class BotService:
             if is_exists:
                 raise APIError(status_code=400, message="Bot name already exists")
 
-        return await self.bot_repo.update(bot.id, schema)
+        await self.bot_repo.update(bot.id, schema.model_dump(exclude={"configs"}))
+
+        schema_configs = schema.configs
+        if schema_configs:
+            for config in schema_configs:
+                await self.delete_bot_config(config.id)
+                await self.create_bot_config(bot.id, config)
+
+        return await self.bot_repo.get(
+            filters={"id": bot.id}, load_options=["configs.variables"]
+        )
 
     async def create_bot_config(
         self, bot_id: UUID, schema: BotConfigCreate
