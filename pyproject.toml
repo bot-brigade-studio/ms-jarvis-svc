@@ -4,7 +4,11 @@ version = "0.1.0"
 description = ""
 authors = ["anggitrestuu <123190026@student.upnyk.ac.id>"]
 readme = "README.md"
-packages = [{ include = "app" }, { include = "scripts" }]
+packages = [
+    { include = "app" },
+    { include = "scripts" },
+    { include = "chainable_llm" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

@@ -1,5 +1,3 @@
-# local_s3/api/deps.py
-from uuid import UUID
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import httpx
@@ -14,8 +12,8 @@ security = HTTPBearer(
 
 
 class CurrentUser(BaseModel):
-    id: UUID
-    tenant_id: UUID
+    id: str
+    tenant_id: str
 
 
 class AuthClient:

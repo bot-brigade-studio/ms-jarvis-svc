@@ -4,7 +4,6 @@ from starlette.responses import Response
 from app.core.exceptions import APIError
 from app.models.base import current_user_id, current_tenant_id, current_bearer_token
 from typing import Optional, Tuple
-from uuid import UUID
 from app.core.logging import logger
 from app.core.config import settings
 import httpx
@@ -18,9 +17,7 @@ class ContextMiddleware(BaseHTTPMiddleware):
         self.auth_service_url = settings.HEIMDALL_SERVICE_URL
         self.client = httpx.AsyncClient()
 
-    async def _validate_token(
-        self, token: str
-    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+    async def _validate_token(self, token: str) -> Tuple[Optional[str], Optional[str]]:
         """
         Validate bearer token and extract user/tenant IDs.
 
@@ -40,8 +37,8 @@ class ContextMiddleware(BaseHTTPMiddleware):
                 return None, None
 
             data = response.json().get("data", {})
-            user_id = UUID(data["user_id"]) if data.get("user_id") else None
-            tenant_id = UUID(data["tenant_id"]) if data.get("tenant_id") else None
+            user_id = str(data["user_id"]) if data.get("user_id") else None
+            tenant_id = str(data["tenant_id"]) if data.get("tenant_id") else None
 
             return user_id, tenant_id
 
@@ -51,21 +48,14 @@ class ContextMiddleware(BaseHTTPMiddleware):
 
     async def _get_context_ids(
         self, request: Request
-    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Extract user and tenant IDs from request based on environment."""
-        if settings.ENVIRONMENT == "production":
-            return (
-                (
-                    UUID(request.headers["X-User-ID"])
-                    if request.headers.get("X-User-ID")
-                    else None
-                ),
-                (
-                    UUID(request.headers["X-Tenant-ID"])
-                    if request.headers.get("X-Tenant-ID")
-                    else None
-                ),
-            )
+
+        x_user_id = request.headers.get("X-User-ID")
+        x_tenant_id = request.headers.get("X-Tenant-ID")
+
+        if x_user_id and x_tenant_id:
+            return str(x_user_id), str(x_tenant_id)
 
         # Non-production environment: validate bearer token
         auth_header = request.headers.get("Authorization", "")

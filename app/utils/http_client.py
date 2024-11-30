@@ -4,7 +4,8 @@ from typing import Optional, Dict
 from app.core.logging import logger
 from app.core.config import settings
 from app.core.exceptions import APIError
-from app.models.base import current_bearer_token
+from app.models.base import current_bearer_token, current_tenant_id, current_user_id
+from app.utils.debug import debug_print
 
 
 class BaseClient:
@@ -13,7 +14,13 @@ class BaseClient:
         self.logger = logger
         self.timeout = timeout
         self.bearer_token = current_bearer_token.get()
-        self.default_headers = {"Authorization": f"Bearer {self.bearer_token}"}
+        self.user_id = current_user_id.get() or ""
+        self.tenant_id = current_tenant_id.get() or ""
+        self.default_headers = {
+            "Authorization": f"Bearer {self.bearer_token}",
+            "X-Tenant-Id": self.tenant_id,
+            "X-User-Id": self.user_id,
+        }
 
     async def _make_request(
         self,
@@ -39,6 +46,7 @@ class BaseClient:
                 )
 
                 if response.status_code >= 400:
+                    debug_print("response", response.json())
                     raise APIError(
                         message=self._get_error_message(response),
                         status_code=response.status_code,
@@ -99,3 +107,8 @@ class HeimdallClient(BaseClient):
 class SanctumClient(BaseClient):
     def __init__(self):
         super().__init__(settings.SANCTUM_SERVICE_URL)
+
+
+class NexusClient(BaseClient):
+    def __init__(self):
+        super().__init__(settings.NEXUS_SERVICE_URL)
