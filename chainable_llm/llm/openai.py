@@ -111,31 +111,34 @@ class OpenAIProvider(BaseLLMProvider):
                 temperature=temperature or self.config.temperature,
                 max_tokens=max_tokens or self.config.max_tokens,
                 stream=True,
+                stream_options={
+                    "include_usage": True,
+                },
             )
 
             buffer = StreamBuffer(self.config.streaming)
 
             async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content or " "
                     stream_chunk = await buffer.process_chunk(content, done=False)
 
                     if stream_chunk:
-                        log_stream_chunk(
-                            provider="openai",
-                            chunk_size=len(stream_chunk.content),
-                            is_final=False,
-                        )
                         yield stream_chunk
 
             # Handle final chunk
-            final_chunk = await buffer.process_chunk("", done=True)
+            final_chunk = await buffer.process_chunk(
+                " ",
+                done=True,
+                metadata={
+                    "usage": {
+                        "prompt_tokens": chunk.usage.prompt_tokens,
+                        "completion_tokens": chunk.usage.completion_tokens,
+                        "total_tokens": chunk.usage.total_tokens,
+                    }
+                },
+            )
             if final_chunk:
-                log_stream_chunk(
-                    provider="openai",
-                    chunk_size=len(final_chunk.content),
-                    is_final=True,
-                )
                 yield final_chunk
 
         except Exception as e:

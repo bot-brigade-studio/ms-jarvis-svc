@@ -51,22 +51,29 @@ class StreamBuffer:
             done and self.buffer_size > 0
         )
 
-    def _create_chunk_metadata(self, done: bool) -> Dict[str, Any]:
+    def _create_chunk_metadata(
+        self, done: bool, metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Create metadata for the current chunk.
 
         Args:
             done (bool): Whether this is the final chunk
+            metadata (Optional[Dict[str, Any]]): Additional metadata to include
         """
         return {
             "chunk_index": self._chunk_count,
             "total_length": len(self.complete_content),
             "buffer_size": self.buffer_size,
             "is_final": done,
+            **(metadata or {}),
         }
 
     async def process_chunk(
-        self, content: str, done: bool = False
+        self,
+        content: str,
+        done: bool = False,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Optional[StreamChunk]:
         """
         Process an incoming content chunk and potentially return a StreamChunk.
@@ -103,7 +110,7 @@ class StreamBuffer:
                 chunk = StreamChunk(
                     content=chunk_content,
                     done=done,
-                    metadata=self._create_chunk_metadata(done),
+                    metadata=self._create_chunk_metadata(done, metadata),
                 )
 
                 # Log chunk creation
