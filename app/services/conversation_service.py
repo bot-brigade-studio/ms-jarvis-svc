@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest
 from app.utils.debug import debug_print
-from app.utils.http_client import NexusClient
+from app.utils.http_client import FrostClient, NexusClient
 from app.core.config import settings
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
@@ -19,6 +19,7 @@ from chainable_llm.core.types import (
 )
 from chainable_llm.nodes.base import LLMNode
 from uuid_extensions import uuid7
+from app.models.base import current_user_id, current_tenant_id
 
 
 class ConversationService:
@@ -27,7 +28,8 @@ class ConversationService:
         self.bot_repo = BotRepository(Bot, db)
         self.bot_config_repo = BotConfigRepository(BotConfig, db)
         self.nexus_client = NexusClient()
-
+        self.frost_client = FrostClient()
+        
     async def process_user_message(
         self,
         bot_id: UUID,
@@ -100,9 +102,25 @@ class ConversationService:
 
             if chunk.done:
                 full_content = "".join(accumulated_content)
-                debug_print("full_content", full_content)
                 await self._post_assistant_message(
                     thread_id, assistant_msg_id, full_content, user_msg_id
+                )
+                usage = chunk.metadata.get("usage")
+                request_id = str(uuid7())
+                payload_usage = {
+                    "account_id": "067423b0-81fa-702b-8000-b03b6db1eb93",
+                    "model_name": config.model_name,
+                    "input_tokens": usage.get("prompt_tokens"),
+                    "output_tokens": usage.get("completion_tokens"),
+                    "request_id": request_id,
+                    "user_id": current_user_id.get(),
+                    "tenant_id": current_tenant_id.get(),
+                    "ip_address": "127.0.0.1",
+                    "user_agent": "",
+                }
+                await self.frost_client.post(
+                    "api/v1/events",
+                    json=payload_usage,
                 )
                 await self.db.commit()
 

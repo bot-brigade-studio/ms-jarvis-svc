@@ -56,7 +56,12 @@ class BaseClient:
                     f"Response: {response.status_code} in {time.time() - time_start:.2f} seconds"
                 )
                 return response
-
+        except httpx.ConnectError as e:
+            self.logger.error(f"Connection error in {method} request to {url}: {e}")
+            raise APIError(
+                message=f"Service {self.base_url.split('/')[-1]} Unavailable",
+                status_code=503,
+            )
         except httpx.TimeoutException as e:
             self.logger.error(f"Timeout in {method} request to {url}: {e}")
             raise APIError(message="Request timed out", status_code=504)
@@ -112,3 +117,7 @@ class SanctumClient(BaseClient):
 class NexusClient(BaseClient):
     def __init__(self):
         super().__init__(settings.NEXUS_SERVICE_URL)
+
+class FrostClient(BaseClient):
+    def __init__(self):
+        super().__init__(settings.FROST_SERVICE_URL)

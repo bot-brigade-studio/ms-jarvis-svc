@@ -71,10 +71,11 @@ class BotService:
 
         await self.bot_repo.update(bot.id, schema.model_dump(exclude={"configs"}))
 
+        await self.bot_config_repo.delete(filters={"bot_id": bot.id}, force=True)
+
         schema_configs = schema.configs
         if schema_configs:
             for config in schema_configs:
-                await self.delete_bot_config(config.id)
                 await self.create_bot_config(bot.id, config)
 
         return await self.bot_repo.get(
