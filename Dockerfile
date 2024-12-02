@@ -1,3 +1,5 @@
+# Dockerfile
+
 # Stage 1: Build stage
 FROM python:3.11-slim AS builder
 
@@ -31,6 +33,7 @@ WORKDIR /app
 # Install runtime system dependencies
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies from builder
@@ -40,6 +43,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY . .
 
+# Make the migration script executable
+RUN chmod +x /app/scripts/run_migrations.sh
+
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
@@ -48,4 +54,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8002
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["/bin/bash", "-c", "/app/scripts/run_migrations.sh && uvicorn app.main:app --host 0.0.0.0 --port 8002"]
