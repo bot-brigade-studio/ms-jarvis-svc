@@ -98,17 +98,32 @@ class AnthropicProvider(BaseLLMProvider):
             )
 
             buffer = StreamBuffer(self.config.streaming)
-
+            prompt_tokens = 0
+            completion_tokens = 0
             async for chunk in stream:
-                if chunk.type == "content_block_delta":
-                    content = chunk.delta.text
+                if chunk.type == "message_start":
+                    prompt_tokens = chunk.message.usage.input_tokens
+                    completion_tokens = chunk.message.usage.output_tokens
+                elif chunk.type == "content_block_delta":
+                    content = chunk.delta.text or " "
                     stream_chunk = await buffer.process_chunk(content, done=False)
-
                     if stream_chunk:
                         yield stream_chunk
+                elif chunk.type == "message_delta":
+                    completion_tokens += chunk.usage.output_tokens
 
             # Handle final chunk
-            final_chunk = await buffer.process_chunk("", done=True)
+            final_chunk = await buffer.process_chunk(
+                " ",
+                done=True,
+                metadata={
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                    }
+                },
+            )
             if final_chunk:
                 yield final_chunk
 
