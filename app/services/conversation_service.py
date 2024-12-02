@@ -59,7 +59,7 @@ class ConversationService:
         credit_account = await self.frost_client.get(f"api/v1/credits/me")
         if credit_account.json()["data"]["balance"] < 5:
             raise APIError(status_code=402, message="Your credit account has insufficient balance")
-        if credit_account.json()["data"]["status"] != "active":
+        if credit_account.json()["data"]["status"] != "ACTIVE":
             raise APIError(status_code=402, message="Your Credit Account is not active")
 
         return self._handle_streaming_response(
