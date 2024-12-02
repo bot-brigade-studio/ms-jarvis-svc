@@ -56,6 +56,12 @@ class ConversationService:
             last_message_id=user_message["id"],
         )
 
+        credit_account = await self.frost_client.get(f"api/v1/credits/me")
+        if credit_account.json()["data"]["balance"] < 5:
+            raise APIError(status_code=402, message="Your credit account has insufficient balance")
+        if credit_account.json()["data"]["status"] != "active":
+            raise APIError(status_code=402, message="Your Credit Account is not active")
+
         return self._handle_streaming_response(
             schema=schema,
             api_key=api_key,
@@ -65,6 +71,7 @@ class ConversationService:
             thread_id=thread_id,
             assistant_msg_id=schema.response_id,
             formatted_history=formatted_history,
+            credit_account=credit_account.json()["data"],
         )
 
     async def stream_callback(chunk: StreamChunk, **kwargs):
@@ -83,6 +90,7 @@ class ConversationService:
         user_msg_id: str,
         assistant_msg_id: str,
         formatted_history: List[Dict[str, str]],
+        credit_account: Dict[str, Any],
     ) -> Union[Dict[str, Any], AsyncIterator[StreamChunk]]:
         """Handle the streaming response from the LLM."""
         accumulated_content = []
@@ -108,7 +116,7 @@ class ConversationService:
                 usage = chunk.metadata.get("usage")
                 request_id = str(uuid7())
                 payload_usage = {
-                    "account_id": "067423b0-81fa-702b-8000-b03b6db1eb93",
+                    "account_id": credit_account["id"],
                     "model_name": config.model_name,
                     "input_tokens": usage.get("prompt_tokens"),
                     "output_tokens": usage.get("completion_tokens"),
@@ -122,7 +130,8 @@ class ConversationService:
                     "api/v1/events",
                     json=payload_usage,
                 )
-                await self.db.commit()
+        
+        await self.db.commit()
 
     def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
         """Retrieve API key and provider based on model name."""
