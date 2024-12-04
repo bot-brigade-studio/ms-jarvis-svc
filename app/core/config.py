@@ -27,9 +27,9 @@ class Settings(BaseSettings):
     BUCKET_NAME: str = "jarvis-service-bucket"
     
     # PROXY
-    BBPROXY_IS_ENABLED: bool = True
-    BBPROXY_LLM_URL: str = "bbproxy.botbrigade.id/api"
-    BBPROXY_API_KEY: str = "vk-ZBPIfHrBc6MBX-ZjUs-AL5Wp0Sh4-emlftEltsY6uh9yv"
+    BBPROXY_IS_ENABLED: bool = False
+    BBPROXY_LLM_URL: str = ""
+    BBPROXY_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
