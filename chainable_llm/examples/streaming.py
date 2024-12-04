@@ -25,6 +25,7 @@ async def stream_callback(chunk: StreamChunk):
     print(f"{chunk.content}", end="", flush=True)
     if chunk.done:
         print("\n--- Stream completed ---")
+        print(f"metadata: {chunk.metadata['usage']}")
 
 
 async def main():
@@ -46,10 +47,10 @@ async def main():
             provider="openai",
             api_key=openai_api_key,
             proxy_api_key=proxy_api_key,
-            proxy_enabled=True,
+            proxy_enabled=bbproxy_enabled,
             proxy_url=bbproxy_llm_url,
             model="gpt-4o-mini",
-            streaming=StreamConfig(enabled=True, chunk_size=10, buffer_size=1024),
+            streaming=StreamConfig(enabled=True, chunk_size=10),
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
@@ -67,7 +68,7 @@ async def main():
             proxy_enabled=True,
             proxy_url=bbproxy_llm_url,
             model="claude-3-5-sonnet-20240620",
-            streaming=StreamConfig(enabled=True, chunk_size=10, buffer_size=1024),
+            streaming=StreamConfig(enabled=True, chunk_size=10),
         ),
         prompt_config=PromptConfig(
             input_type=InputType.USER_PROMPT,
@@ -87,11 +88,11 @@ async def main():
     # print("result.metadata", result.metadata)
 
     # Process with streaming
-    async for chunk in streaming_node_openai.process_stream(test_input):
-        pass
-    
-    # async for chunk in streaming_node_anthropic.process_stream(test_input):
+    # async for chunk in streaming_node_openai.process_stream(test_input):
     #     pass
+    
+    async for chunk in streaming_node_anthropic.process_stream(test_input):
+        pass
 
 
 if __name__ == "__main__":

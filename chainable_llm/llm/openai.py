@@ -26,9 +26,7 @@ class OpenAIProvider(BaseLLMProvider):
             api_key=self.api_key,
             base_url=self.base_url,
         )
-        print("OPENAI : apikey", self.api_key)
-        print("OPENAI : baseurl", self.base_url)
-
+        
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
     )
@@ -131,11 +129,6 @@ class OpenAIProvider(BaseLLMProvider):
 
                     if stream_chunk:
                         yield stream_chunk
-            
-            print("================")
-            print("\nchunk", chunk)
-            print("\n================")
-
             # Handle final chunk
             final_chunk = await buffer.process_chunk(
                 " ",

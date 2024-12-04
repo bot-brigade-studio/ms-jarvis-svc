@@ -23,8 +23,6 @@ class AnthropicProvider(BaseLLMProvider):
             api_key=self.api_key,
             base_url=self.base_url,
         )
-        print("ANTROPIC : apikey", self.api_key)
-        print("ANTROPIC : baseurl", self.base_url)
         
     def _convert_messages(
         self, conversation: ConversationHistory
