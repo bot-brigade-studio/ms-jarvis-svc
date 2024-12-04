@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     FROST_SERVICE_URL: str = "https://api-shield.botbrigade.tech/frost"
     # S3
     BUCKET_NAME: str = "jarvis-service-bucket"
+    
+    # PROXY
+    BBPROXY_IS_ENABLED: bool = True
+    BBPROXY_LLM_URL: str = "bbproxy.botbrigade.id/api"
+    BBPROXY_API_KEY: str = "vk-ZBPIfHrBc6MBX-ZjUs-AL5Wp0Sh4-emlftEltsY6uh9yv"
 
     class Config:
         env_file = ".env"

@@ -17,8 +17,15 @@ from chainable_llm.llm.base import BaseLLMProvider
 class AnthropicProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        self.client = AsyncAnthropic(api_key=config.api_key)
-
+        self.api_key = config.api_key if not config.proxy_enabled else config.proxy_api_key
+        self.base_url = config.proxy_url if config.proxy_enabled else None
+        self.client = AsyncAnthropic(
+            api_key=self.api_key,
+            base_url=self.base_url,
+        )
+        print("ANTROPIC : apikey", self.api_key)
+        print("ANTROPIC : baseurl", self.base_url)
+        
     def _convert_messages(
         self, conversation: ConversationHistory
     ) -> List[Dict[str, str]]:

@@ -238,6 +238,9 @@ class ConversationService:
                 temperature=config.temperature,
                 max_tokens=config.max_output_tokens,
                 streaming=StreamConfig(enabled=True, chunk_size=10),
+                proxy_enabled=settings.BBPROXY_IS_ENABLED,
+                proxy_url=settings.BBPROXY_LLM_URL,
+                proxy_api_key=settings.BBPROXY_API_KEY,
             ),
             prompt_config=PromptConfig(
                 input_type=InputType.USER_PROMPT,

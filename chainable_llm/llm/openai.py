@@ -13,7 +13,6 @@ from chainable_llm.core.exceptions import LLMProviderError
 from chainable_llm.core.logging import (
     log_llm_request,
     log_error,
-    log_stream_chunk,
     log_any,
 )
 
@@ -21,7 +20,14 @@ from chainable_llm.core.logging import (
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        self.client = AsyncOpenAI(api_key=config.api_key)
+        self.api_key = config.api_key if not config.proxy_enabled else config.proxy_api_key
+        self.base_url = config.proxy_url if config.proxy_enabled else None
+        self.client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+        )
+        print("OPENAI : apikey", self.api_key)
+        print("OPENAI : baseurl", self.base_url)
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10)
@@ -125,6 +131,10 @@ class OpenAIProvider(BaseLLMProvider):
 
                     if stream_chunk:
                         yield stream_chunk
+            
+            print("================")
+            print("\nchunk", chunk)
+            print("\n================")
 
             # Handle final chunk
             final_chunk = await buffer.process_chunk(

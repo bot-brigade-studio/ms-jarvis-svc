@@ -84,6 +84,9 @@ class LLMConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: Optional[int] = None
     streaming: Optional[StreamConfig] = None
+    proxy_enabled: bool = False
+    proxy_url: str = ""
+    proxy_api_key: str = ""
 
 
 # Update LLMResponse to handle streaming
