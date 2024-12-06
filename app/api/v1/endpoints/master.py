@@ -2,7 +2,6 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from app.services.master import MasterService
 from app.schemas.master import MstCategoryBase, MstItemBase
-from app.utils.debug import debug_print
 from app.utils.response_handler import response
 from app.schemas.response import StandardResponse
 from uuid import UUID

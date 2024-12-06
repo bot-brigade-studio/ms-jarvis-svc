@@ -52,9 +52,10 @@ class ConversationService:
         user_message = await self._post_user_message(thread_id, payload)
         formatted_history = await self._get_formatted_history(
             thread_id=thread_id,
-            branch_id=user_message["branch_id"],
-            last_message_id=user_message["id"],
+            bot_id=bot_id,
         )
+        
+        debug_print("formatted_history", formatted_history)
 
         credit_account = await self.frost_client.get(f"api/v1/credits/me")
         if credit_account.json()["data"]["balance"] < 5:
@@ -158,15 +159,12 @@ class ConversationService:
             raise APIError(status_code=400, message="Invalid model name")
 
     async def _get_formatted_history(
-        self, thread_id: UUID, branch_id, last_message_id: Optional[UUID] = None
+        self, thread_id: UUID, bot_id: UUID
     ) -> List[Dict[str, str]]:
         """Get formatted conversation history for LLM."""
         res = await self.nexus_client.get(
             f"api/v1/messages/{thread_id}",
-            params={
-                "last_message_id": last_message_id,
-                "branch_id": branch_id,
-            },
+            params={"skip": 0, "limit": 100, "group_by": str(bot_id)},
         )
         messages = res.json()["data"]
         return [

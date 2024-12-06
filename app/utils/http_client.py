@@ -46,7 +46,6 @@ class BaseClient:
                 )
 
                 if response.status_code >= 400:
-                    debug_print("response", response.json())
                     raise APIError(
                         message=self._get_error_message(response),
                         status_code=response.status_code,

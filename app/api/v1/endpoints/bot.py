@@ -4,7 +4,6 @@ from app.api.v1.endpoints.deps import CurrentUser, get_current_user
 from app.models.enums import StatusEnum
 from app.services.bot import BotService
 from app.schemas.bot import BotConfigCreate, BotConfigResponse, BotCreate, BotResponse
-from app.utils.debug import debug_print
 from app.utils.response_handler import response
 from app.schemas.response import StandardResponse
 from uuid import UUID
@@ -18,8 +17,6 @@ async def create_bot(
     service: BotService = Depends(),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    debug_print("current_user", current_user)
-
     item = await service.create_bot(schema)
 
     return response.success(data=item, message="Bot created successfully")
