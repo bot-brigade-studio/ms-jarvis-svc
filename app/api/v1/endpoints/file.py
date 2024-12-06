@@ -49,6 +49,5 @@ async def upload_image(
 async def stream_file(
     file_name: str,
     service: FileService = Depends(),
-    current_user: CurrentUser = Depends(get_current_user),
 ):
     return await service.stream_file(file_name)
