@@ -14,7 +14,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.jarvis.rule=Host(`api-shield.botbrigade.tech`) && PathPrefix(`/jarvis`)"
       - "traefik.http.services.jarvis.loadbalancer.server.port=8002"
-      - "traefik.http.routers.jarvis.middlewares=dev-secure-headers@file,validate-permission@file"
+      - "traefik.http.routers.jarvis.middlewares=dev-secure-headers@file,validate-permission@file,upload-limit@file"
       - "traefik.http.routers.jarvis.tls.certresolver=cloudflare"
 
 networks:
