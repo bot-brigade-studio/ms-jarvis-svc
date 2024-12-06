@@ -54,16 +54,17 @@ class ContextMiddleware(BaseHTTPMiddleware):
         x_user_id = request.headers.get("X-User-ID")
         x_tenant_id = request.headers.get("X-Tenant-ID")
 
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            current_bearer_token.set(token)  # Set the bearer token here
+
         if x_user_id and x_tenant_id:
             return str(x_user_id), str(x_tenant_id)
 
-        # Non-production environment: validate bearer token
-        auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return None, None
 
-        token = auth_header.split(" ")[1]
-        current_bearer_token.set(token)
         return await self._validate_token(token)
 
     async def dispatch(
