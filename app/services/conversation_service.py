@@ -235,7 +235,7 @@ class ConversationService:
                 model=config.model_name,
                 temperature=config.temperature,
                 max_tokens=config.max_output_tokens,
-                streaming=StreamConfig(enabled=True, chunk_size=10),
+                streaming=StreamConfig(enabled=True, chunk_size=100, buffer_size=1024),
                 proxy_enabled=settings.BBPROXY_IS_ENABLED,
                 proxy_url=settings.BBPROXY_LLM_URL,
                 proxy_api_key=settings.BBPROXY_API_KEY,
