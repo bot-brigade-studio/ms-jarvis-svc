@@ -41,3 +41,6 @@ logs/
 # Database
 *.db
 *.sqlite3
+
+# Deploy
+scripts/deploy.sh
