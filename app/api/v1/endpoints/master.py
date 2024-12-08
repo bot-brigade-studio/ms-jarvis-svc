@@ -5,13 +5,16 @@ from app.schemas.master import MstCategoryBase, MstItemBase
 from app.utils.response_handler import response
 from app.schemas.response import StandardResponse
 from uuid import UUID
+from app.api.v1.endpoints.deps import get_current_user, CurrentUser
 
 router = APIRouter()
 
 
 @router.post("/categories", response_model=StandardResponse[MstCategoryBase])
 async def create_mst_category(
-    schema: MstCategoryBase, service: MasterService = Depends()
+    schema: MstCategoryBase,
+    service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     item = await service.create_mst_category(schema)
     return response.success(
@@ -22,7 +25,10 @@ async def create_mst_category(
 
 @router.put("/categories/{id}", response_model=StandardResponse[MstCategoryBase])
 async def update_mst_category(
-    id: UUID, schema: MstCategoryBase, service: MasterService = Depends()
+    id: UUID,
+    schema: MstCategoryBase,
+    service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     item = await service.update_mst_category(id, schema)
     return response.success(
@@ -32,7 +38,10 @@ async def update_mst_category(
 
 
 @router.get("/categories/{id}", response_model=StandardResponse[MstCategoryBase])
-async def get_mst_category(id: UUID, service: MasterService = Depends()):
+async def get_mst_category(
+    id: UUID,
+    service: MasterService = Depends()
+):
     item = await service.get_mst_category(id)
     return response.success(
         data=item,
@@ -55,14 +64,23 @@ async def get_mst_categories(
 
 
 @router.delete("/categories/{id}", response_model=StandardResponse[None])
-async def delete_mst_category(id: UUID, service: MasterService = Depends()):
+async def delete_mst_category(
+    id: UUID,
+    service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     await service.delete_mst_category(id)
     return response.success(message="MstCategory deleted successfully")
 
 
-@router.post("/categories/{slug}/items", response_model=StandardResponse[MstItemBase])
+@router.post(
+    "/categories/{slug}/items", response_model=StandardResponse[MstItemBase]
+)
 async def create_mst_item(
-    slug: str, schema: MstItemBase, service: MasterService = Depends()
+    slug: str,
+    schema: MstItemBase,
+    service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     item = await service.create_mst_item(slug, schema)
     return response.success(
@@ -75,14 +93,23 @@ async def create_mst_item(
     "/categories/{slug}/items/{id}", response_model=StandardResponse[MstItemBase]
 )
 async def update_mst_item(
-    slug: str, id: UUID, schema: MstItemBase, service: MasterService = Depends()
+    slug: str,
+    id: UUID,
+    schema: MstItemBase,
+    service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     item = await service.update_mst_item(slug, id, schema)
     return response.success(data=item, message="MstItem updated successfully")
 
 
-@router.delete("/categories/{slug}/items/{id}", response_model=StandardResponse[None])
-async def delete_mst_item(slug: str, id: UUID, service: MasterService = Depends()):
+@router.delete(
+    "/categories/{slug}/items/{id}", response_model=StandardResponse[None]
+)
+async def delete_mst_item(
+    slug: str, id: UUID, service: MasterService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     await service.delete_mst_item(slug, id)
     return response.success(message="MstItem deleted successfully")
 
@@ -90,7 +117,9 @@ async def delete_mst_item(slug: str, id: UUID, service: MasterService = Depends(
 @router.get(
     "/categories/{slug}/items/{id}", response_model=StandardResponse[MstItemBase]
 )
-async def get_mst_item(slug: str, id: UUID, service: MasterService = Depends()):
+async def get_mst_item(
+    slug: str, id: UUID, service: MasterService = Depends()
+):
     item = await service.get_mst_item(id)
     return response.success(data=item, message="MstItem fetched successfully")
 
