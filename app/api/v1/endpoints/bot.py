@@ -42,7 +42,11 @@ async def get_bots(
 
 
 @router.get("/{id}", response_model=StandardResponse[BotResponse])
-async def get_bot(id: UUID, service: BotService = Depends()):
+async def get_bot(
+    id: UUID,
+    service: BotService = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     item = await service.get_bot(id)
 
     return response.success(data=item, message="Bot fetched successfully")

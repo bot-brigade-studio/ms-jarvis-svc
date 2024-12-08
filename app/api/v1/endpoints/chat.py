@@ -53,6 +53,7 @@ async def get_messages(
     skip: int = 0,
     limit: int = 10,
     nexus_client: NexusClient = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     messages = await nexus_client.get(
         f"api/v1/messages/{thread_id}",
@@ -94,6 +95,7 @@ async def update_thread(
     thread_id: UUID,
     schema: CreateThreadRequest,
     nexus_client: NexusClient = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     schema_dict = schema.model_dump()
     schema_dict["group_by"] = str(bot_id)
@@ -116,6 +118,7 @@ async def delete_thread(
     bot_id: UUID,
     thread_id: UUID,
     nexus_client: NexusClient = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     res = await nexus_client.put(
         f"api/v1/threads/{thread_id}/status",
