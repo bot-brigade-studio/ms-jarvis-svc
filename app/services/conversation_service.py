@@ -115,6 +115,10 @@ class ConversationService:
                 await self._post_assistant_message(
                     thread_id, assistant_msg_id, full_content, user_msg_id
                 )
+                if len(formatted_history) == 1:
+                    fist_two_messages = formatted_history
+                    fist_two_messages.append({"role": "assistant", "content": full_content})
+                    await self._update_thread_name(thread_id, fist_two_messages)
                 usage = chunk.metadata.get("usage")
                 request_id = str(uuid7())
                 payload_usage = {
@@ -133,9 +137,7 @@ class ConversationService:
                     json=payload_usage,
                 )
         
-        # validate just for 2 messages first
-        if len(formatted_history) == 2:
-            await self._update_thread_name(thread_id, formatted_history[:2])
+           
         
         await self.db.commit()
         
