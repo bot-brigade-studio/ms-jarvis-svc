@@ -157,12 +157,13 @@ class ConversationService:
 
     def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
         """Retrieve API key and provider based on model name."""
-        pattern_openai = r"gpt-\d{1,2}-\w{1,2}"
-        pattern_anthropic = r"claude-\d-\w{1,2}-\w{1,2}"
+        # If model name contains "gpt" then OpenAI, if contains "claude" then Anthropic
+        is_openai = "gpt" in model_name.lower()
+        is_anthropic = "claude" in model_name.lower()
 
-        if re.match(pattern_openai, model_name):
+        if is_openai:
             return settings.OPENAI_API_KEY, "openai"
-        elif re.match(pattern_anthropic, model_name):
+        elif is_anthropic:
             return settings.ANTHROPIC_API_KEY, "anthropic"
         else:
             raise APIError(status_code=400, message="Invalid model name")
