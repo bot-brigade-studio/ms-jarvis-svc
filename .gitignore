@@ -44,3 +44,5 @@ logs/
 
 # Deploy
 scripts/deploy.sh
+
+database_backups/

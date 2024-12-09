@@ -1,3 +1,4 @@
+import re
 from typing import AsyncIterator, List, Optional, Dict, Any, Union, Tuple
 from uuid import UUID
 from fastapi.params import Depends
@@ -132,28 +133,36 @@ class ConversationService:
                     json=payload_usage,
                 )
         
+        # validate just for 2 messages first
+        if len(formatted_history) == 2:
+            await self._update_thread_name(thread_id, formatted_history[:2])
+        
         await self.db.commit()
+        
+    async def _update_thread_name(self, thread_id: UUID, fist_two_messages: List[Dict[str, str]]):
+        bot_config = BotConfig(
+            model_name="gpt-4o-mini",
+            temperature=0.0,
+            max_output_tokens=1000,
+        )
+        input_msg = f"Create a title for this conversation: {fist_two_messages}"
+        system_message = "You are a helpful assistant. Generate a concise title for the conversation."
+        llm_summary = self._initialize_llm("", "openai", bot_config, system_message)
+        title = await llm_summary.process(input_msg)
+
+        await self.nexus_client.put(
+            f"api/v1/threads/{thread_id}/name",
+            json={"name": title.content},
+        )
 
     def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
         """Retrieve API key and provider based on model name."""
-        openai_models = [
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4",
-            "gpt-4-turbo",
-            "gpt-3.5-turbo",
-        ]
-        anthropic_models = [
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-sonnet-20240620",
-            "claude-3-haiku-20240307",
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-        ]
+        pattern_openai = r"gpt-\d{1,2}-\w{1,2}"
+        pattern_anthropic = r"claude-\d-\w{1,2}-\w{1,2}"
 
-        if model_name in openai_models:
+        if re.match(pattern_openai, model_name):
             return settings.OPENAI_API_KEY, "openai"
-        elif model_name in anthropic_models:
+        elif re.match(pattern_anthropic, model_name):
             return settings.ANTHROPIC_API_KEY, "anthropic"
         else:
             raise APIError(status_code=400, message="Invalid model name")
