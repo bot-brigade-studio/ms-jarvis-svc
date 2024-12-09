@@ -87,7 +87,17 @@ async def create_thread(
         data=item.get("data"),
         message="Thread created successfully",
     )
-    
+
+@router.get("/{bot_id}/thread/{thread_id}")
+async def get_thread(
+    bot_id: UUID,
+    thread_id: UUID,
+    nexus_client: NexusClient = Depends(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    res = await nexus_client.get(f"api/v1/threads/{thread_id}")
+    item = res.json()
+    return response.success(data=item.get("data"))
 
 @router.put("/{bot_id}/thread/{thread_id}")
 async def update_thread(
