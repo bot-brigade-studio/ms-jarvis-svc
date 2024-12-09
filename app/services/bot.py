@@ -171,13 +171,22 @@ class BotService:
         await self.bot_repo.delete(filters={"id": id}, force=True)
 
     async def get_bots(
-        self, skip: int = 0, limit: int = 10, filters: Dict[str, Any] = None
+        self,
+        skip: int = 0,
+        limit: int = 10,
+        filters: Dict[str, Any] = None,
+        search_term: str = None,
+        search_fields: Dict[str, str] = None,
     ):
         return await self.bot_repo.get_multi(
-            skip=skip, limit=limit, filters=filters, load_options=["category"]
+            skip=skip, limit=limit, filters=filters, search_term=search_term, search_fields=search_fields, load_options=["category"]
         )
 
-    async def get_bot(self, id: UUID):
+    async def get_bot(self, id: UUID, with_details: bool = True):
+        load_options = ["category"]
+        if with_details:
+            load_options.append("configs.variables")
+        
         return await self.bot_repo.get(
-            filters={"id": id}, load_options=["configs.variables", "category"]
+            filters={"id": id}, load_options=load_options
         )
