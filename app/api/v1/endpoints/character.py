@@ -50,5 +50,5 @@ async def get_character(
     service: BotService = Depends(),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    item = await service.get_bot(bot_id, with_details=False)
-    return response.success(data=item, message="Character fetched successfully")
+    items, total = await service.get_bot(bot_id, with_details=False)
+    return response.success(data=items, message="Character fetched successfully", meta={"total": total})
