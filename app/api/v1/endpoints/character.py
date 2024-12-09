@@ -14,7 +14,7 @@ async def get_discovery_characters(
     service: BotService = Depends(),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1),
-    category_id: Optional[UUID] = Query(None),
+    category_id: Optional[str] = Query(None),
     name: Optional[str] = Query(None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
