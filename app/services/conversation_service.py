@@ -59,9 +59,10 @@ class ConversationService:
         debug_print("formatted_history", formatted_history)
 
         credit_account = await self.frost_client.get(f"api/v1/credits/me")
-        if credit_account.json()["data"]["balance"] < 5:
+        credit_account_data = credit_account.json()["data"]
+        if credit_account_data["balance"] < 0:
             raise APIError(status_code=402, message="Your credit account has insufficient balance")
-        if credit_account.json()["data"]["status"] != "ACTIVE":
+        if credit_account_data["status"] != "ACTIVE":
             raise APIError(status_code=402, message="Your Credit Account is not active")
 
         return self._handle_streaming_response(
@@ -73,7 +74,7 @@ class ConversationService:
             thread_id=thread_id,
             assistant_msg_id=schema.response_id,
             formatted_history=formatted_history,
-            credit_account=credit_account.json()["data"],
+            credit_account=credit_account_data,
         )
 
     async def stream_callback(chunk: StreamChunk, **kwargs):
@@ -129,8 +130,9 @@ class ConversationService:
                     "request_id": request_id,
                     "user_id": current_user_id.get(),
                     "tenant_id": current_tenant_id.get(),
-                    "ip_address": "127.0.0.1",
+                    "ip_address": "",
                     "user_agent": "",
+                    "team_id": schema.team_id,
                 }
                 await self.frost_client.post(
                     "api/v1/events",

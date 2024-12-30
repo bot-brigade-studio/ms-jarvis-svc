@@ -12,3 +12,4 @@ class CreateMessageRequest(BaseModel):
     id: Optional[str] = None
     parent_id: Optional[str] = None
     response_id: Optional[str] = None
+    team_id: Optional[str] = None
