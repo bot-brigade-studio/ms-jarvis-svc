@@ -1,20 +1,22 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import Depends
 from sqlalchemy import UUID
 from app.core.exceptions import APIError
 from app.db.session import get_db
-from app.models.bot import Bot, BotConfig, ConfigVariable
+from app.models.bot import Bot, BotConfig, ConfigVariable, TeamBotAccess
 from app.models.master import MstItem
 from app.repositories.bot_repository import (
     BotConfigRepository,
     BotRepository,
     ConfigVariableRepository,
+    TeamBotAccessRepository,
 )
 from app.repositories.master_repository import MstItemRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 import re
+from app.models.enums import AccessLevelEnum
 
-from app.schemas.bot import BotConfigCreate, BotCreate
+from app.schemas.bot import BotConfigCreate, BotCreate, TeamBotAccessCreate
 
 
 class BotService:
@@ -24,6 +26,7 @@ class BotService:
         self.bot_config_repo = BotConfigRepository(BotConfig, db)
         self.config_variable_repo = ConfigVariableRepository(ConfigVariable, db)
         self.mst_item_repo = MstItemRepository(MstItem, db)
+        self.team_bot_access_repo = TeamBotAccessRepository(TeamBotAccess, db)
 
     async def _validate_category(self, category_id: UUID):
         category = await self.mst_item_repo.get(
@@ -50,8 +53,16 @@ class BotService:
             for config in schema_configs:
                 await self.create_bot_config(bot.id, config)
 
+        if schema.team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
+            for team_access in schema.team_access:
+                await self.team_bot_access_repo.create({
+                    "team_id": team_access.team_id,
+                    "bot_id": bot.id
+                })
+
         return await self.bot_repo.get(
-            filters={"id": bot.id}, load_options=["configs.variables"]
+            filters={"id": bot.id},
+            load_options=["configs.variables"]
         )
 
     async def update_bot(self, id: UUID, schema: BotCreate) -> Bot:
@@ -69,7 +80,10 @@ class BotService:
             if is_exists:
                 raise APIError(status_code=400, message="Bot name already exists")
 
-        await self.bot_repo.update(bot.id, schema.model_dump(exclude={"configs"}))
+        await self.bot_repo.update(
+            bot.id,
+            schema.model_dump(exclude={"configs"})
+        )
 
         await self.bot_config_repo.delete(filters={"bot_id": bot.id}, force=True)
 
@@ -78,8 +92,17 @@ class BotService:
             for config in schema_configs:
                 await self.create_bot_config(bot.id, config)
 
+        await self.team_bot_access_repo.delete(filters={"bot_id": bot.id}, force=True)
+        if schema.team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
+            for team_access in schema.team_access:
+                await self.team_bot_access_repo.create({
+                    "team_id": team_access.team_id,
+                    "bot_id": bot.id
+                })
+
         return await self.bot_repo.get(
-            filters={"id": bot.id}, load_options=["configs.variables"]
+            filters={"id": bot.id},
+            load_options=["configs.variables"]
         )
 
     async def create_bot_config(
@@ -177,9 +200,32 @@ class BotService:
         filters: Dict[str, Any] = None,
         search_term: str = None,
         search_fields: Dict[str, str] = None,
+        team_id: Optional[UUID] = None
     ):
+        if team_id:
+            # If team_id is provided, get bots accessible to the team
+            base_filters = filters or {}
+            team_filters = {
+                "or": [
+                    {"access_level": AccessLevelEnum.ORG_LEVEL},
+                    {"access_level": AccessLevelEnum.HYBRID},
+                    {
+                        "and": [
+                            {"access_level": AccessLevelEnum.TEAM_LEVEL},
+                            {"team_access.team_id": team_id}
+                        ]
+                    }
+                ]
+            }
+            filters = {**base_filters, **team_filters}
+
         return await self.bot_repo.get_multi(
-            skip=skip, limit=limit, filters=filters, search_term=search_term, search_fields=search_fields, load_options=["category"]
+            skip=skip,
+            limit=limit,
+            filters=filters,
+            search_term=search_term,
+            search_fields=search_fields,
+            load_options=["category", "team_access"]
         )
 
     async def get_bot(self, id: UUID, with_details: bool = True):

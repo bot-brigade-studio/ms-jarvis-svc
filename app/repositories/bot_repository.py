@@ -9,3 +9,7 @@ class BotConfigRepository(BaseRepository[BotConfig, None, None]):
 
 class ConfigVariableRepository(BaseRepository[ConfigVariable, None, None]):
     pass
+
+class TeamBotAccessRepository(BaseRepository):
+    """Repository for managing team bot access"""
+    pass

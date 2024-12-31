@@ -1,6 +1,6 @@
 from typing import Optional
 from app.schemas.base import BaseSchema
-from app.models.enums import StatusEnum
+from app.models.enums import StatusEnum, AccessLevelEnum
 from pydantic import BaseModel, Field
 from typing import List
 from uuid import UUID
@@ -15,6 +15,8 @@ class BotBase(BaseModel):
     is_bot_definition_public: bool
     status: StatusEnum
     category_id: Optional[UUID] = None
+    access_level: AccessLevelEnum = AccessLevelEnum.ORG_LEVEL
+    team_id: Optional[UUID] = None
 
 
 class BotConfigVariableBase(BaseModel):
@@ -41,6 +43,7 @@ class BotConfigCreate(BotConfigBase):
 
 class BotCreate(BotBase):
     configs: Optional[List[BotConfigCreate]] = None
+    team_access: Optional[List[TeamBotAccessCreate]] = None
 
 
 class BotConfigVariableResponse(BotConfigVariableBase, BaseSchema):
@@ -53,3 +56,12 @@ class BotConfigResponse(BotConfigBase, BaseSchema):
 
 class BotResponse(BotBase, BaseSchema):
     configs: List[BotConfigResponse]
+    team_access: List[TeamBotAccessResponse]
+
+
+class TeamBotAccessCreate(BaseModel):
+    team_id: UUID
+
+
+class TeamBotAccessResponse(TeamBotAccessCreate, BaseSchema):
+    bot_id: UUID
