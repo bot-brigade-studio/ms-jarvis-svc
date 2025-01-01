@@ -34,11 +34,7 @@ class Bot(TenantSoftDeleteModel):
         Boolean, default=False
     )  # if true, public users can see the bot definition including the parameters and variables
     status = Column(SQLAlchemyEnum(StatusEnum), default=StatusEnum.ACTIVE)
-    access_level = Column(
-        SQLAlchemyEnum(AccessLevelEnum),
-        nullable=False,
-        default=AccessLevelEnum.ORG_LEVEL
-    )
+    access_level = Column(String(20), default=AccessLevelEnum.ORG_LEVEL.value, nullable=True)
 
     # Relationships
     configs = relationship("BotConfig", back_populates="bot")
