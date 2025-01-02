@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import Depends
 from sqlalchemy import UUID
 from app.core.exceptions import APIError
@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import re
 from app.models.enums import AccessLevelEnum
 
-from app.schemas.bot import BotConfigCreate, BotCreate, TeamBotAccessCreate
+from app.schemas.bot import BotConfigCreate, BotCreate
+from app.utils.http_client import HeimdallClient
 
 
 class BotService:
@@ -27,6 +28,7 @@ class BotService:
         self.config_variable_repo = ConfigVariableRepository(ConfigVariable, db)
         self.mst_item_repo = MstItemRepository(MstItem, db)
         self.team_bot_access_repo = TeamBotAccessRepository(TeamBotAccess, db)
+        self.heimdall_client = HeimdallClient()
 
     async def _validate_category(self, category_id: UUID):
         category = await self.mst_item_repo.get(
@@ -37,7 +39,7 @@ class BotService:
 
     async def create_bot(self, schema: BotCreate) -> Bot:
         is_exists = await self.bot_repo.get(
-            filters={"name": schema.name}, select_fields=["id"]
+            filters={"name": schema.name}, select_fields=["id"], is_tenant_scoped=True
         )
         if is_exists:
             raise APIError(status_code=400, message="Bot name already exists")
@@ -45,16 +47,16 @@ class BotService:
         if schema.category_id:
             await self._validate_category(schema.category_id)
 
-        schema_bot = schema.model_dump(exclude={"configs"})
+        schema_bot = schema.model_dump(exclude={"configs", "team_access"})
         bot = await self.bot_repo.create(schema_bot)
-
         schema_configs = schema.configs
         if schema_configs:
             for config in schema_configs:
                 await self.create_bot_config(bot.id, config)
 
-        if schema.team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
-            for team_access in schema.team_access:
+        schema_team_access = schema.team_access
+        if schema_team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
+            for team_access in schema_team_access:
                 await self.team_bot_access_repo.create({
                     "team_id": team_access.team_id,
                     "bot_id": bot.id
@@ -62,7 +64,7 @@ class BotService:
 
         return await self.bot_repo.get(
             filters={"id": bot.id},
-            load_options=["configs.variables"]
+            load_options=["configs.variables", "team_access"]
         )
 
     async def update_bot(self, id: UUID, schema: BotCreate) -> Bot:
@@ -82,7 +84,7 @@ class BotService:
 
         await self.bot_repo.update(
             bot.id,
-            schema.model_dump(exclude={"configs"})
+            schema.model_dump(exclude={"configs", "team_access"})
         )
 
         await self.bot_config_repo.delete(filters={"bot_id": bot.id}, force=True)
@@ -200,39 +202,54 @@ class BotService:
         filters: Dict[str, Any] = None,
         search_term: str = None,
         search_fields: Dict[str, str] = None,
-        team_id: Optional[UUID] = None
+        joins: List[str] = None,
     ):
-        if team_id:
-            # If team_id is provided, get bots accessible to the team
-            base_filters = filters or {}
-            team_filters = {
-                "or": [
-                    {"access_level": AccessLevelEnum.ORG_LEVEL},
-                    {"access_level": AccessLevelEnum.HYBRID},
-                    {
-                        "and": [
-                            {"access_level": AccessLevelEnum.TEAM_LEVEL},
-                            {"team_access.team_id": team_id}
-                        ]
-                    }
-                ]
-            }
-            filters = {**base_filters, **team_filters}
-
-        return await self.bot_repo.get_multi(
+        items, total = await self.bot_repo.get_multi(
             skip=skip,
             limit=limit,
             filters=filters,
             search_term=search_term,
             search_fields=search_fields,
-            load_options=["category", "team_access"]
+            joins=joins,
+            load_options=["category", "team_access"],
+            is_tenant_scoped=True
         )
 
+        team_ids = []
+        for item in items:
+            team_ids.extend([team_access.team_id for team_access in item.team_access])
+
+        response = await self.heimdall_client.get(f"api/v1/teams", params={"id": team_ids})
+        teams = response.json()["data"]
+
+        team_access_map = {}
+        for team in teams:
+            team_access_map[team["id"]] = team
+
+        for item in items:
+            for team_access in item.team_access:
+                team_access.team_name = team_access_map[str(team_access.team_id)]["name"]
+
+        return items, total
+
     async def get_bot(self, id: UUID, with_details: bool = True):
-        load_options = ["category"]
+        load_options = ["category", "team_access"]
         if with_details:
             load_options.append("configs.variables")
         
-        return await self.bot_repo.get(
+        item = await self.bot_repo.get(
             filters={"id": id}, load_options=load_options
         )
+
+        team_ids = [team_access.team_id for team_access in item.team_access]
+        response = await self.heimdall_client.get(f"api/v1/teams", params={"id": team_ids})
+        teams = response.json()["data"]
+
+        team_access_map = {}
+        for team in teams:
+            team_access_map[team["id"]] = team
+
+        for team_access in item.team_access:
+            team_access.team_name = team_access_map[str(team_access.team_id)]["name"]
+
+        return item

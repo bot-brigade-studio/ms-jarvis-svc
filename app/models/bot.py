@@ -15,7 +15,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.models.base import TenantSoftDeleteModel
+from app.models.base import TenantSoftDeleteModel, TenantModel
 from app.models.enums import StatusEnum, AccessLevelEnum
 
 

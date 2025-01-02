@@ -40,6 +40,8 @@ class BotConfigBase(BaseModel):
 class BotConfigCreate(BotConfigBase):
     pass
 
+class TeamBotAccessCreate(BaseModel):
+    team_id: UUID
 
 class BotCreate(BotBase):
     configs: Optional[List[BotConfigCreate]] = None
@@ -56,12 +58,3 @@ class BotConfigResponse(BotConfigBase, BaseSchema):
 
 class BotResponse(BotBase, BaseSchema):
     configs: List[BotConfigResponse]
-    team_access: List[TeamBotAccessResponse]
-
-
-class TeamBotAccessCreate(BaseModel):
-    team_id: UUID
-
-
-class TeamBotAccessResponse(TeamBotAccessCreate, BaseSchema):
-    bot_id: UUID

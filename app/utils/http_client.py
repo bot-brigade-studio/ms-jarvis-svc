@@ -99,7 +99,7 @@ class BaseClient:
                 json_response.get("detail")
                 or json_response.get("message")
                 or response.text
-            )
+        )
         return response.text
 
 
