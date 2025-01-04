@@ -9,13 +9,14 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Enum as SQLAlchemyEnum,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.models.base import TenantSoftDeleteModel
-from app.models.enums import StatusEnum
+from app.models.base import TenantSoftDeleteModel, TenantModel
+from app.models.enums import StatusEnum, AccessLevelEnum
 
 
 class Bot(TenantSoftDeleteModel):
@@ -27,15 +28,18 @@ class Bot(TenantSoftDeleteModel):
     description = Column(Text)  # eg. "This bot helps academics write better."
     greeting = Column(Text)  # eg. "Hello! How can I assist you today?"
     category_id = Column(UUID(as_uuid=True), ForeignKey("mst_items.id"))
+    team_id = Column(UUID(as_uuid=True), nullable=True)
 
     is_bot_definition_public = Column(
         Boolean, default=False
     )  # if true, public users can see the bot definition including the parameters and variables
     status = Column(SQLAlchemyEnum(StatusEnum), default=StatusEnum.ACTIVE)
+    access_level = Column(String(20), default=AccessLevelEnum.ORG_LEVEL.value, nullable=True)
 
     # Relationships
     configs = relationship("BotConfig", back_populates="bot")
     category = relationship("MstItem", back_populates="bot_categories")
+    team_access = relationship("TeamBotAccess", back_populates="bot")
 
 
 class BotConfig(TenantSoftDeleteModel):
@@ -71,3 +75,18 @@ class ConfigVariable(TenantSoftDeleteModel):
 
     # Relationships
     config = relationship("BotConfig", back_populates="variables")
+
+
+class TeamBotAccess(TenantSoftDeleteModel):
+    __tablename__ = "team_bot_access"
+
+    team_id = Column(UUID(as_uuid=True), nullable=False)
+    bot_id = Column(UUID(as_uuid=True), ForeignKey("bots.id"), nullable=False)
+    
+    # Relationships
+    bot = relationship("Bot", back_populates="team_access")
+
+    # Add unique constraint to prevent duplicate team-bot pairs
+    __table_args__ = (
+        UniqueConstraint('team_id', 'bot_id', name='unique_team_bot'),
+    )

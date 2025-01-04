@@ -4,6 +4,7 @@ from app.api.v1.endpoints.deps import CurrentUser, get_current_user
 from app.models.enums import StatusEnum
 from app.services.bot import BotService
 from app.schemas.bot import BotConfigCreate, BotConfigResponse, BotCreate, BotResponse
+from app.utils.debug import debug_print
 from app.utils.response_handler import response
 from app.schemas.response import StandardResponse
 from uuid import UUID
@@ -33,7 +34,7 @@ async def get_bots(
     filters = {}
     if status:
         filters["status"] = status
-
+        
     items, total = await service.get_bots(skip=skip, limit=limit, filters=filters)
 
     return response.success(
