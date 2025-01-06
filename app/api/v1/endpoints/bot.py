@@ -30,10 +30,13 @@ async def get_bots(
     status: Optional[StatusEnum] = Query(None),
     service: BotService = Depends(),
     current_user: CurrentUser = Depends(get_current_user),
+    team_id: Optional[str] = Query(None),
 ):
     filters = {}
     if status:
         filters["status"] = status
+    if team_id:
+        filters["team_access.team_id"] = team_id
         
     items, total = await service.get_bots(skip=skip, limit=limit, filters=filters)
 
