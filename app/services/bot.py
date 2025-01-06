@@ -191,10 +191,16 @@ class BotService:
             raise APIError(status_code=404, message="Bot not found")
 
         configs, _ = await self.bot_config_repo.get_multi(
-            filters={"bot_id": id}, select_fields=["id"]
+            filters={"bot_id": id}, select_fields=["id"], skip=0, limit=100
         )
         for config in configs:
             await self.delete_bot_config(config.id)
+
+        team_accesses, _ = await self.team_bot_access_repo.get_multi(
+            filters={"bot_id": id}, select_fields=["id"], skip=0, limit=100
+        )
+        for team_access in team_accesses:
+            await self.team_bot_access_repo.delete(team_access.id)
 
         await self.bot_repo.delete(filters={"id": id}, force=True)
 
