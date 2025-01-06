@@ -8,8 +8,6 @@ from app.core.logging import logger
 from app.core.config import settings
 import httpx
 
-from app.utils.debug import debug_print
-
 
 class ContextMiddleware(BaseHTTPMiddleware):
     """Middleware to handle user and tenant context for requests."""
@@ -76,10 +74,6 @@ class ContextMiddleware(BaseHTTPMiddleware):
         try:
             # Get context IDs
             user_id, tenant_id = await self._get_context_ids(request)
-            
-            debug_print("user_id", user_id)
-            debug_print("tenant_id", tenant_id)
-
             # Set context variables
             current_user_id.set(user_id)
             current_tenant_id.set(tenant_id)

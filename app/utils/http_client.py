@@ -5,8 +5,6 @@ from app.core.logging import logger
 from app.core.config import settings
 from app.core.exceptions import APIError
 from app.models.base import current_bearer_token, current_tenant_id, current_user_id
-from app.utils.debug import debug_print
-
 
 class BaseClient:
     def __init__(self, base_url: str, timeout: float = 30.0):
