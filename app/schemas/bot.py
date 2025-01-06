@@ -16,7 +16,6 @@ class BotBase(BaseModel):
     status: StatusEnum
     category_id: Optional[UUID] = None
     access_level: AccessLevelEnum = AccessLevelEnum.ORG_LEVEL
-    team_id: Optional[UUID] = None
 
 
 class BotConfigVariableBase(BaseModel):

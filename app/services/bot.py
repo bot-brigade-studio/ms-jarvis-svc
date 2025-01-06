@@ -18,6 +18,7 @@ from app.models.enums import AccessLevelEnum
 
 from app.schemas.bot import BotConfigCreate, BotCreate
 from app.utils.http_client import HeimdallClient
+from app.utils.debug import debug_print
 
 
 class BotService:
@@ -77,10 +78,12 @@ class BotService:
 
         if schema.name != bot.name:
             is_exists = await self.bot_repo.get(
-                filters={"name": schema.name}, select_fields=["id"]
+                filters={"name": schema.name}, select_fields=["id"], is_tenant_scoped=True
             )
             if is_exists:
                 raise APIError(status_code=400, message="Bot name already exists")
+            
+        debug_print("schema", schema)
 
         await self.bot_repo.update(
             bot.id,
@@ -104,7 +107,7 @@ class BotService:
 
         return await self.bot_repo.get(
             filters={"id": bot.id},
-            load_options=["configs.variables"]
+            load_options=["configs.variables", "team_access"]
         )
 
     async def create_bot_config(
