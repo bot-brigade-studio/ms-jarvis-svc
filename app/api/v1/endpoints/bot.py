@@ -32,13 +32,18 @@ async def get_bots(
     current_user: CurrentUser = Depends(get_current_user),
     team_id: Optional[str] = Query(None),
 ):
+    joins = []
     filters = {}
     if status:
         filters["status"] = status
     if team_id:
         filters["team_access.team_id"] = team_id
+        joins.append("team_access")
         
-    items, total = await service.get_bots(skip=skip, limit=limit, filters=filters)
+        
+    debug_print(filters)
+        
+    items, total = await service.get_bots(skip=skip, limit=limit, filters=filters, joins=joins)
 
     return response.success(
         data=items, message="Bots fetched successfully", meta={"total": total}

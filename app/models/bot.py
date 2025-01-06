@@ -15,7 +15,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.dialects.postgresql import JSONB
 
-from app.models.base import TenantSoftDeleteModel, TenantModel
+from app.models.base import TenantSoftDeleteModel, BaseModel
 from app.models.enums import StatusEnum, AccessLevelEnum
 
 
@@ -28,8 +28,6 @@ class Bot(TenantSoftDeleteModel):
     description = Column(Text)  # eg. "This bot helps academics write better."
     greeting = Column(Text)  # eg. "Hello! How can I assist you today?"
     category_id = Column(UUID(as_uuid=True), ForeignKey("mst_items.id"))
-    team_id = Column(UUID(as_uuid=True), nullable=True)
-
     is_bot_definition_public = Column(
         Boolean, default=False
     )  # if true, public users can see the bot definition including the parameters and variables
@@ -42,7 +40,7 @@ class Bot(TenantSoftDeleteModel):
     team_access = relationship("TeamBotAccess", back_populates="bot")
 
 
-class BotConfig(TenantSoftDeleteModel):
+class BotConfig(BaseModel):
     __tablename__ = "bot_configs"
 
     is_current = Column(
@@ -66,7 +64,7 @@ class BotConfig(TenantSoftDeleteModel):
     variables = relationship("ConfigVariable", back_populates="config")
 
 
-class ConfigVariable(TenantSoftDeleteModel):
+class ConfigVariable(BaseModel):
     __tablename__ = "config_variables"
 
     key = Column(String(255))  # eg. "academic_level"
@@ -77,7 +75,7 @@ class ConfigVariable(TenantSoftDeleteModel):
     config = relationship("BotConfig", back_populates="variables")
 
 
-class TeamBotAccess(TenantSoftDeleteModel):
+class TeamBotAccess(BaseModel):
     __tablename__ = "team_bot_access"
 
     team_id = Column(UUID(as_uuid=True), nullable=False)
