@@ -30,6 +30,7 @@ async def get_bots(
     service: BotService = Depends(),
     current_user: CurrentUser = Depends(get_current_user),
     team_id: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
 ):
     joins = []
     filters = {}
@@ -38,8 +39,20 @@ async def get_bots(
     if team_id:
         filters["team_access.team_id"] = team_id
         joins.append("team_access")
+    
+    search_fields = {"name": "contains"}
+    search_term = None
+    if name:
+        search_term = name
         
-    items, total = await service.get_bots(skip=skip, limit=limit, filters=filters, joins=joins)
+    items, total = await service.get_bots(
+        skip=skip,
+        limit=limit, 
+        filters=filters, 
+        joins=joins, 
+        search_term=search_term, 
+        search_fields=search_fields
+    )
 
     return response.success(
         data=items, message="Bots fetched successfully", meta={"total": total}
