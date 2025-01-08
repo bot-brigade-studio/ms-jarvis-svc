@@ -259,6 +259,8 @@ class BotService:
             team_access_map[team["id"]] = team
 
         for team_access in item.team_access:
-            team_access.team_name = team_access_map[str(team_access.team_id)]["name"]
+            team_name = team_access_map.get(str(team_access.team_id), {}).get("name")
+            if team_name:
+                team_access.team_name = team_name
 
         return item
