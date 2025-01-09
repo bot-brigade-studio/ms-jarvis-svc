@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
 
     # Services
-    HEIMDALL_SERVICE_URL: str = "https://api-shield.botbrigade.tech/heimdall"
-    SANCTUM_SERVICE_URL: str = "https://api-shield.botbrigade.tech/sanctum"
-    NEXUS_SERVICE_URL: str = "https://api-shield.botbrigade.tech/nexus"
-    FROST_SERVICE_URL: str = "https://api-shield.botbrigade.tech/frost"
+    HEIMDALL_SERVICE_URL: str = "https://api-shield.botbrigade.xyz/heimdall"
+    SANCTUM_SERVICE_URL: str = "https://api-shield.botbrigade.xyz/sanctum"
+    NEXUS_SERVICE_URL: str = "https://api-shield.botbrigade.xyz/nexus"
+    FROST_SERVICE_URL: str = "https://api-shield.botbrigade.xyz/frost"
     # S3
     BUCKET_NAME: str = "jarvis-service-bucket"
     
