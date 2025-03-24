@@ -5,6 +5,7 @@ from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest, SendMessageRequest
+from app.utils.debug import debug_print
 from app.utils.http_client import FrostClient, NexusClient
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
@@ -48,12 +49,11 @@ class ConversationService:
             ),
         )
 
-        formatted_history = await self._get_formatted_history(
+        messages = await self._get_formatted_messages(
             thread_id=thread_id,
             bot_id=bot_id,
+            system_message=config.custom_instructions,
         )
-        system_message = config.custom_instructions
-        formatted_history.insert(0, {"role": "system", "content": system_message})
 
         credit_account = await self.frost_client.get(f"api/v1/credits/me")
         credit_account_data = credit_account.json()["data"]
@@ -75,7 +75,7 @@ class ConversationService:
             user_msg_id=user_message["id"],
             thread_id=thread_id,
             assistant_msg_id=schema.response_id,
-            formatted_history=formatted_history,
+            messages=messages,
         )
 
     async def _handle_streaming_response(
@@ -84,7 +84,7 @@ class ConversationService:
         thread_id: UUID,
         user_msg_id: str,
         assistant_msg_id: str,
-        formatted_history: List[Dict[str, str]],
+        messages: List[Dict[str, str]],
     ) -> Union[Dict[str, Any], AsyncGenerator[str, None]]:
         """Handle the streaming response from the LLM."""
         accumulated_content = []
@@ -93,9 +93,11 @@ class ConversationService:
 
         async for chunk in await llm_client.responses.acreate(
             model="claudia-1",
-            messages=formatted_history,
+            messages=messages,
             stream=True,
         ):
+            debug_print("Messages", messages)
+
             if chunk:
                 accumulated_content.append(chunk)
                 yield chunk
@@ -114,10 +116,10 @@ class ConversationService:
                         ),
                     )
 
-                    if len(formatted_history) == 2:
+                    if len(messages) == 2:
                         # remove system message
-                        formatted_history.pop(0)
-                        fist_two_messages = formatted_history
+                        messages.pop(0)
+                        fist_two_messages = messages
                         fist_two_messages.append(
                             {"role": "assistant", "content": full_content}
                         )
@@ -146,8 +148,8 @@ class ConversationService:
             json={"name": content},
         )
 
-    async def _get_formatted_history(
-        self, thread_id: UUID, bot_id: UUID
+    async def _get_formatted_messages(
+        self, thread_id: UUID, bot_id: UUID, system_message: str
     ) -> List[Dict[str, str]]:
         """Get formatted conversation history for LLM."""
         res = await self.nexus_client.get(
@@ -155,10 +157,15 @@ class ConversationService:
             params={"skip": 0, "limit": 10, "group_by": str(bot_id)},
         )
         messages = res.json()["data"]
-        return [
-            {"role": message["role"], "content": message["content"]}
-            for message in messages
-        ]
+        formatted_messages = []
+        if system_message:
+            formatted_messages.append({"role": "system", "content": system_message})
+        for message in messages:
+            formatted_messages.append(
+                {"role": message["role"], "content": message["content"]}
+            )
+
+        return formatted_messages
 
     async def _get_bot_config(self, bot_id: UUID) -> BotConfig:
         """Retrieve the bot configuration."""
