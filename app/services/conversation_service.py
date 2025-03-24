@@ -1,26 +1,17 @@
-import re
-from typing import AsyncIterator, List, Optional, Dict, Any, Union, Tuple
+from typing import AsyncGenerator, List, Dict, Any, Union
 from uuid import UUID
+import json
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest
 from app.utils.debug import debug_print
 from app.utils.http_client import FrostClient, NexusClient
-from app.core.config import settings
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
 from app.core.exceptions import APIError
-from chainable_llm.core.types import (
-    InputType,
-    LLMConfig,
-    PromptConfig,
-    StreamChunk,
-    StreamConfig,
-)
-from chainable_llm.nodes.base import LLMNode
+from botbrigade_llm import LLMClient
 from uuid_extensions import uuid7
-from app.models.base import current_user_id, current_tenant_id
 
 
 class ConversationService:
@@ -30,7 +21,7 @@ class ConversationService:
         self.bot_config_repo = BotConfigRepository(BotConfig, db)
         self.nexus_client = NexusClient()
         self.frost_client = FrostClient()
-        
+
     async def process_user_message(
         self,
         bot_id: UUID,
@@ -46,7 +37,6 @@ class ConversationService:
             )
 
         config = await self._get_bot_config(bot_id)
-        api_key, provider = self._get_api_key_and_provider(config.model_name)
 
         payload = self._create_payload(schema)
 
@@ -55,122 +45,91 @@ class ConversationService:
             thread_id=thread_id,
             bot_id=bot_id,
         )
-        
-        debug_print("formatted_history", formatted_history)
+        system_message = config.custom_instructions
+        formatted_history.insert(0, {"role": "system", "content": system_message})
 
         credit_account = await self.frost_client.get(f"api/v1/credits/me")
         credit_account_data = credit_account.json()["data"]
         if credit_account_data["balance"] < 0:
-            raise APIError(status_code=402, message="Your credit account has insufficient balance")
+            raise APIError(
+                status_code=402, message="Your credit account has insufficient balance"
+            )
         if credit_account_data["status"] != "ACTIVE":
             raise APIError(status_code=402, message="Your Credit Account is not active")
 
+        project_api_key = await self.frost_client.get(
+            "api/v1/project-api-keys/me/current"
+        )
+        project_api_key_data = project_api_key.json()["data"]
+        api_key = project_api_key_data["key"]
+
         return self._handle_streaming_response(
-            schema=schema,
             api_key=api_key,
-            provider=provider,
-            config=config,
             user_msg_id=user_message["id"],
             thread_id=thread_id,
             assistant_msg_id=schema.response_id,
             formatted_history=formatted_history,
-            credit_account=credit_account_data,
         )
-
-    async def stream_callback(chunk: StreamChunk, **kwargs):
-        """Simple callback to print streaming chunks."""
-        print(f"{chunk.content}", end="", flush=True)
-        if chunk.done:
-            print("\n--- Stream completed ---\n")
 
     async def _handle_streaming_response(
         self,
-        schema: CreateMessageRequest,
         api_key: str,
-        provider: str,
-        config: BotConfig,
         thread_id: UUID,
         user_msg_id: str,
         assistant_msg_id: str,
         formatted_history: List[Dict[str, str]],
-        credit_account: Dict[str, Any],
-    ) -> Union[Dict[str, Any], AsyncIterator[StreamChunk]]:
+    ) -> Union[Dict[str, Any], AsyncGenerator[str, None]]:
         """Handle the streaming response from the LLM."""
         accumulated_content = []
-        system_message = config.custom_instructions
 
-        llm = self._initialize_llm(api_key, provider, config, system_message)
+        llm_client = LLMClient(api_key=api_key)
 
-        for message in formatted_history[:-1]:
-            llm.conversation.add_message(
-                role=message["role"], content=message["content"]
-            )
+        async for chunk in await llm_client.responses.acreate(
+            model="claudia-1",
+            messages=formatted_history,
+            stream=True,
+        ):
+            if chunk:
+                accumulated_content.append(chunk)
+                yield chunk
 
-        async for chunk in llm.process_stream(schema.content):
-            if chunk.content:
-                accumulated_content.append(chunk.content)
-            yield chunk
+                if chunk == "{}":
+                    full_content = "".join(accumulated_content)
+                    await self._post_assistant_message(
+                        thread_id, assistant_msg_id, full_content, user_msg_id
+                    )
 
-            if chunk.done:
-                full_content = "".join(accumulated_content)
-                await self._post_assistant_message(
-                    thread_id, assistant_msg_id, full_content, user_msg_id
-                )
-                if len(formatted_history) == 1:
-                    fist_two_messages = formatted_history
-                    fist_two_messages.append({"role": "assistant", "content": full_content})
-                    await self._update_thread_name(thread_id, fist_two_messages)
-                usage = chunk.metadata.get("usage")
-                request_id = str(uuid7())
-                payload_usage = {
-                    "account_id": credit_account["id"],
-                    "model_name": config.model_name,
-                    "input_tokens": usage.get("prompt_tokens"),
-                    "output_tokens": usage.get("completion_tokens"),
-                    "request_id": request_id,
-                    "user_id": current_user_id.get(),
-                    "tenant_id": current_tenant_id.get(),
-                    "ip_address": "",
-                    "user_agent": "",
-                    "team_id": schema.team_id,
-                }
-                await self.frost_client.post(
-                    "api/v1/events",
-                    json=payload_usage,
-                )
-        
-           
-        
-        await self.db.commit()
-        
-    async def _update_thread_name(self, thread_id: UUID, fist_two_messages: List[Dict[str, str]]):
-        bot_config = BotConfig(
-            model_name="gpt-4o-mini",
-            temperature=0.0,
-            max_output_tokens=1000,
+                    if len(formatted_history) == 2:
+                        # remove system message
+                        formatted_history.pop(0)
+                        fist_two_messages = formatted_history
+                        fist_two_messages.append(
+                            {"role": "assistant", "content": full_content}
+                        )
+                        await self._update_thread_name(
+                            api_key, thread_id, fist_two_messages
+                        )
+
+    async def _update_thread_name(
+        self, api_key: str, thread_id: UUID, fist_two_messages: List[Dict[str, str]]
+    ):
+
+        llm_client = LLMClient(api_key=api_key)
+        response = llm_client.responses.create(
+            model="claudia-1",
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Generate a short and concise one-sentence title for the following conversation between a user and an assistant. Only return the sentence itself without quotation marks or any extra characters : "
+                    + json.dumps(fist_two_messages),
+                },
+            ],
         )
-        input_msg = f"Create a title for this conversation: {fist_two_messages}"
-        system_message = "You are a helpful assistant. Generate a concise title for the conversation."
-        llm_summary = self._initialize_llm("", "openai", bot_config, system_message)
-        title = await llm_summary.process(input_msg)
-
+        content = response["choices"][0]["message"]["content"]
         await self.nexus_client.put(
             f"api/v1/threads/{thread_id}/name",
-            json={"name": title.content},
+            json={"name": content},
         )
-
-    def _get_api_key_and_provider(self, model_name: str) -> Tuple[str, str]:
-        """Retrieve API key and provider based on model name."""
-        # If model name contains "gpt" then OpenAI, if contains "claude" then Anthropic
-        is_openai = "gpt" in model_name.lower()
-        is_anthropic = "claude" in model_name.lower()
-
-        if is_openai:
-            return settings.OPENAI_API_KEY, "openai"
-        elif is_anthropic:
-            return settings.ANTHROPIC_API_KEY, "anthropic"
-        else:
-            raise APIError(status_code=400, message="Invalid model name")
 
     async def _get_formatted_history(
         self, thread_id: UUID, bot_id: UUID
@@ -178,7 +137,7 @@ class ConversationService:
         """Get formatted conversation history for LLM."""
         res = await self.nexus_client.get(
             f"api/v1/messages/{thread_id}",
-            params={"skip": 0, "limit": 100, "group_by": str(bot_id)},
+            params={"skip": 0, "limit": 10, "group_by": str(bot_id)},
         )
         messages = res.json()["data"]
         return [
@@ -217,6 +176,7 @@ class ConversationService:
         self, thread_id: UUID, payload: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Post user message to the server."""
+
         res = await self.nexus_client.post(
             f"api/v1/messages/{thread_id}",
             json=payload,
@@ -227,36 +187,14 @@ class ConversationService:
         self, thread_id: UUID, assistant_msg_id: str, content: str, user_msg_id: str
     ):
         """Post assistant message to the server."""
+        payload = {
+            "id": assistant_msg_id,
+            "content": content,
+            "status": "completed",
+            "parent_id": user_msg_id,
+            "role": "assistant",
+        }
         await self.nexus_client.post(
             f"api/v1/messages/{thread_id}",
-            json={
-                "id": assistant_msg_id,
-                "content": content,
-                "status": "completed",
-                "parent_id": user_msg_id,
-                "role": "assistant",
-            },
-        )
-
-    def _initialize_llm(
-        self, api_key: str, provider: str, config: BotConfig, system_message: str
-    ) -> LLMNode:
-        """Initialize the LLM node."""
-        return LLMNode(
-            llm_config=LLMConfig(
-                provider=provider,
-                api_key=api_key,
-                model=config.model_name,
-                temperature=config.temperature,
-                max_tokens=config.max_output_tokens,
-                streaming=StreamConfig(enabled=True, chunk_size=10),
-                proxy_enabled=settings.BBPROXY_IS_ENABLED,
-                proxy_url=settings.BBPROXY_LLM_URL,
-                proxy_api_key=settings.BBPROXY_API_KEY,
-            ),
-            prompt_config=PromptConfig(
-                input_type=InputType.USER_PROMPT,
-                base_system_prompt=system_message,
-                template="{input}",
-            ),
+            json=payload,
         )

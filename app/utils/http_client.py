@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.exceptions import APIError
 from app.models.base import current_bearer_token, current_tenant_id, current_user_id
 
+
 class BaseClient:
     def __init__(self, base_url: str, timeout: float = 30.0):
         self.base_url = base_url
@@ -33,9 +34,13 @@ class BaseClient:
         """
         time_start = time.time()
         url = f"{self.base_url}/{endpoint}"
-        headers = {**self.default_headers, **kwargs.pop("headers", {})}
 
-        self.logger.info(f"{method} request to {url}")
+        # Create a copy of default headers and update with kwargs headers
+        headers = self.default_headers.copy()
+        if "headers" in kwargs:
+            headers.update(kwargs.pop("headers"))
+
+        self.logger.info(f"{method} request to {url}", extra={"headers": headers})
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -43,15 +48,17 @@ class BaseClient:
                     method, url, data=data, json=json, headers=headers, **kwargs
                 )
 
+                self.logger.info(
+                    f"Response: {response.status_code} in {time.time() - time_start:.2f} seconds"
+                )
+
                 if response.status_code >= 400:
+                    print("response errors", response.text)
                     raise APIError(
                         message=self._get_error_message(response),
                         status_code=response.status_code,
                     )
 
-                self.logger.info(
-                    f"Response: {response.status_code} in {time.time() - time_start:.2f} seconds"
-                )
                 return response
         except httpx.ConnectError as e:
             self.logger.error(f"Connection error in {method} request to {url}: {e}")
@@ -97,7 +104,7 @@ class BaseClient:
                 json_response.get("detail")
                 or json_response.get("message")
                 or response.text
-        )
+            )
         return response.text
 
 
@@ -114,6 +121,7 @@ class SanctumClient(BaseClient):
 class NexusClient(BaseClient):
     def __init__(self):
         super().__init__(settings.NEXUS_SERVICE_URL)
+
 
 class FrostClient(BaseClient):
     def __init__(self):

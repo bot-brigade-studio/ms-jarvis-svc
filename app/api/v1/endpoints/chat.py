@@ -88,6 +88,7 @@ async def create_thread(
         message="Thread created successfully",
     )
 
+
 @router.get("/{bot_id}/thread/{thread_id}")
 async def get_thread(
     bot_id: UUID,
@@ -98,6 +99,7 @@ async def get_thread(
     res = await nexus_client.get(f"api/v1/threads/{thread_id}")
     item = res.json()
     return response.success(data=item.get("data"))
+
 
 @router.put("/{bot_id}/thread/{thread_id}")
 async def update_thread(
@@ -123,6 +125,7 @@ async def update_thread(
         message="Thread updated successfully",
     )
 
+
 @router.delete("/{bot_id}/thread/{thread_id}")
 async def delete_thread(
     bot_id: UUID,
@@ -144,6 +147,7 @@ async def delete_thread(
         data=item.get("data"),
         message="Thread deleted successfully",
     )
+
 
 @router.get("/{bot_id}/thread")
 async def get_thread(

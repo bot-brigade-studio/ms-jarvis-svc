@@ -32,7 +32,9 @@ class Bot(TenantSoftDeleteModel):
         Boolean, default=False
     )  # if true, public users can see the bot definition including the parameters and variables
     status = Column(SQLAlchemyEnum(StatusEnum), default=StatusEnum.ACTIVE)
-    access_level = Column(String(20), default=AccessLevelEnum.ORG_LEVEL.value, nullable=True)
+    access_level = Column(
+        String(20), default=AccessLevelEnum.ORG_LEVEL.value, nullable=True
+    )
 
     # Relationships
     configs = relationship("BotConfig", back_populates="bot")
@@ -80,11 +82,9 @@ class TeamBotAccess(BaseModel):
 
     team_id = Column(UUID(as_uuid=True), nullable=False)
     bot_id = Column(UUID(as_uuid=True), ForeignKey("bots.id"), nullable=False)
-    
+
     # Relationships
     bot = relationship("Bot", back_populates="team_access")
 
     # Add unique constraint to prevent duplicate team-bot pairs
-    __table_args__ = (
-        UniqueConstraint('team_id', 'bot_id', name='unique_team_bot'),
-    )
+    __table_args__ = (UniqueConstraint("team_id", "bot_id", name="unique_team_bot"),)
