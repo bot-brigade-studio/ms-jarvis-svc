@@ -13,3 +13,11 @@ class CreateMessageRequest(BaseModel):
     parent_id: Optional[str] = None
     response_id: Optional[str] = None
     team_id: Optional[str] = None
+
+
+class SendMessageRequest(BaseModel):
+    content: str
+    role: str = "user"
+    id: Optional[str] = None
+    parent_id: Optional[str] = None
+    status: str = "completed"

@@ -4,8 +4,7 @@ import json
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.schemas.chat import CreateMessageRequest
-from app.utils.debug import debug_print
+from app.schemas.chat import CreateMessageRequest, SendMessageRequest
 from app.utils.http_client import FrostClient, NexusClient
 from app.models.bot import Bot, BotConfig
 from app.repositories.bot_repository import BotConfigRepository, BotRepository
@@ -38,9 +37,17 @@ class ConversationService:
 
         config = await self._get_bot_config(bot_id)
 
-        payload = self._create_payload(schema)
+        user_message = await self._send_message_nexus(
+            thread_id,
+            SendMessageRequest(
+                content=schema.content,
+                role="user",
+                id=schema.id if schema.id else str(uuid7()),
+                parent_id=schema.parent_id if schema.parent_id else None,
+                status="completed",
+            ),
+        )
 
-        user_message = await self._post_user_message(thread_id, payload)
         formatted_history = await self._get_formatted_history(
             thread_id=thread_id,
             bot_id=bot_id,
@@ -95,8 +102,16 @@ class ConversationService:
 
                 if chunk == "{}":
                     full_content = "".join(accumulated_content)
-                    await self._post_assistant_message(
-                        thread_id, assistant_msg_id, full_content, user_msg_id
+
+                    await self._send_message_nexus(
+                        thread_id,
+                        SendMessageRequest(
+                            content=full_content,
+                            role="assistant",
+                            id=assistant_msg_id,
+                            parent_id=user_msg_id,
+                            status="completed",
+                        ),
                     )
 
                     if len(formatted_history) == 2:
@@ -162,39 +177,10 @@ class ConversationService:
 
         return config
 
-    def _create_payload(self, schema: CreateMessageRequest) -> Dict[str, Any]:
-        """Create payload for user message."""
-        return {
-            "content": schema.content,
-            "role": "user",
-            "id": schema.id if schema.id else str(uuid7()),
-            "parent_id": schema.parent_id if schema.parent_id else None,
-            "status": "completed",
-        }
-
-    async def _post_user_message(
-        self, thread_id: UUID, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Post user message to the server."""
-
+    async def _send_message_nexus(self, thread_id: UUID, payload: SendMessageRequest):
         res = await self.nexus_client.post(
             f"api/v1/messages/{thread_id}",
-            json=payload,
+            json=payload.model_dump(),
         )
-        return res.json()["data"]
 
-    async def _post_assistant_message(
-        self, thread_id: UUID, assistant_msg_id: str, content: str, user_msg_id: str
-    ):
-        """Post assistant message to the server."""
-        payload = {
-            "id": assistant_msg_id,
-            "content": content,
-            "status": "completed",
-            "parent_id": user_msg_id,
-            "role": "assistant",
-        }
-        await self.nexus_client.post(
-            f"api/v1/messages/{thread_id}",
-            json=payload,
-        )
+        return res.json()["data"]
