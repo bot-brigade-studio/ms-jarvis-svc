@@ -1,48 +1,46 @@
 [tool.poetry]
-name = "ms-jarvis-svc"
-version = "0.1.0"
-description = ""
 authors = ["anggitrestuu <123190026@student.upnyk.ac.id>"]
-readme = "README.md"
+description = ""
+name = "ms-jarvis-svc"
 packages = [
-    { include = "app" },
-    { include = "scripts" },
-    { include = "chainable_llm" },
+  {include = "app"},
+  {include = "scripts"},
 ]
+readme = "README.md"
+version = "0.1.0"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+alembic = "^1.14.0"
+anthropic = "^0.39.0"
+async-timeout = "^5.0.1"
+asyncpg = "^0.30.0"
 fastapi = "^0.115.5"
-uvicorn = "^0.32.1"
-sqlalchemy = "^2.0.36"
+greenlet = "^3.1.1"
+httpx = "^0.27.2"
+jinja2 = "^3.1.4"
+openai = "^1.55.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+psycopg2-binary = "^2.9.10"
 pydantic = "^2.10.1"
 pydantic-settings = "^2.6.1"
-alembic = "^1.14.0"
+pytest = "^8.3.3"
+python = "^3.11"
+python-dateutil = "^2.9.0.post0"
 python-dotenv = "^1.0.1"
-psycopg2-binary = "^2.9.10"
-python-jose = { extras = ["cryptography"], version = "^3.3.0" }
-passlib = { extras = ["bcrypt"], version = "^1.7.4" }
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+python-json-logger = "^2.0.7"
 python-multipart = "^0.0.17"
 requests = "^2.32.3"
-pytest = "^8.3.3"
-python-json-logger = "^2.0.7"
-asyncpg = "^0.30.0"
-python-dateutil = "^2.9.0.post0"
-jinja2 = "^3.1.4"
-anthropic = "^0.39.0"
-openai = "^1.55.0"
-tiktoken = "^0.8.0"
-async-timeout = "^5.0.1"
-typer = "^0.13.1"
-uuid7 = "^0.1.0"
-httpx = "^0.27.2"
+sqlalchemy = "^2.0.36"
 sse-starlette = "^2.1.3"
 structlog = "^24.4.0"
 tenacity = "^9.0.0"
-greenlet = "^3.1.1"
-botbrigade-llm = "^0.1.0"
-
+tiktoken = "^0.8.0"
+typer = "^0.13.1"
+uuid7 = "^0.1.0"
+uvicorn = "^0.32.1"
+botbrigade-llm = "^0.1.2"
 
 [build-system]
-requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core"]

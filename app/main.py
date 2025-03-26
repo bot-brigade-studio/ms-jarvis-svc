@@ -14,7 +14,6 @@ from app.api.v1.router import api_router
 from app.utils.response_handler import response
 from app.middleware.request_id import RequestIDMiddleware
 from app.middleware.audit import AuditLogMiddleware
-from app.middleware.context import ContextMiddleware
 
 
 def create_application() -> FastAPI:
@@ -29,7 +28,6 @@ def create_application() -> FastAPI:
     )
 
     application.add_middleware(RequestIDMiddleware)
-    application.add_middleware(ContextMiddleware)
     application.add_middleware(AuditLogMiddleware)
     # Add CORS middleware
     application.add_middleware(

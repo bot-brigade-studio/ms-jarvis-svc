@@ -18,7 +18,6 @@ from app.models.enums import AccessLevelEnum
 
 from app.schemas.bot import BotConfigCreate, BotCreate
 from app.utils.http_client import HeimdallClient
-from app.utils.debug import debug_print
 
 
 class BotService:
@@ -58,14 +57,12 @@ class BotService:
         schema_team_access = schema.team_access
         if schema_team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
             for team_access in schema_team_access:
-                await self.team_bot_access_repo.create({
-                    "team_id": team_access.team_id,
-                    "bot_id": bot.id
-                })
+                await self.team_bot_access_repo.create(
+                    {"team_id": team_access.team_id, "bot_id": bot.id}
+                )
 
         return await self.bot_repo.get(
-            filters={"id": bot.id},
-            load_options=["configs.variables", "team_access"]
+            filters={"id": bot.id}, load_options=["configs.variables", "team_access"]
         )
 
     async def update_bot(self, id: UUID, schema: BotCreate) -> Bot:
@@ -78,16 +75,15 @@ class BotService:
 
         if schema.name != bot.name:
             is_exists = await self.bot_repo.get(
-                filters={"name": schema.name}, select_fields=["id"], is_tenant_scoped=True
+                filters={"name": schema.name},
+                select_fields=["id"],
+                is_tenant_scoped=True,
             )
             if is_exists:
                 raise APIError(status_code=400, message="Bot name already exists")
-            
-        debug_print("schema", schema)
 
         await self.bot_repo.update(
-            bot.id,
-            schema.model_dump(exclude={"configs", "team_access"})
+            bot.id, schema.model_dump(exclude={"configs", "team_access"})
         )
 
         await self.bot_config_repo.delete(filters={"bot_id": bot.id}, force=True)
@@ -100,14 +96,12 @@ class BotService:
         await self.team_bot_access_repo.delete(filters={"bot_id": bot.id}, force=True)
         if schema.team_access and schema.access_level != AccessLevelEnum.ORG_LEVEL:
             for team_access in schema.team_access:
-                await self.team_bot_access_repo.create({
-                    "team_id": team_access.team_id,
-                    "bot_id": bot.id
-                })
+                await self.team_bot_access_repo.create(
+                    {"team_id": team_access.team_id, "bot_id": bot.id}
+                )
 
         return await self.bot_repo.get(
-            filters={"id": bot.id},
-            load_options=["configs.variables", "team_access"]
+            filters={"id": bot.id}, load_options=["configs.variables", "team_access"]
         )
 
     async def create_bot_config(
@@ -213,6 +207,7 @@ class BotService:
         search_fields: Dict[str, str] = None,
         joins: List[str] = None,
     ):
+
         items, total = await self.bot_repo.get_multi(
             skip=skip,
             limit=limit,
@@ -221,14 +216,16 @@ class BotService:
             search_fields=search_fields,
             joins=joins,
             load_options=["category", "team_access"],
-            is_tenant_scoped=True
+            is_tenant_scoped=True,
         )
 
         team_ids = []
         for item in items:
             team_ids.extend([team_access.team_id for team_access in item.team_access])
 
-        response = await self.heimdall_client.get(f"api/v1/teams", params={"id": team_ids})
+        response = await self.heimdall_client.get(
+            f"api/v1/teams", params={"id": team_ids}
+        )
         teams = response.json()["data"]
 
         team_access_map = {}
@@ -237,7 +234,9 @@ class BotService:
 
         for item in items:
             for team_access in item.team_access:
-                team_name = team_access_map.get(str(team_access.team_id), {}).get("name")
+                team_name = team_access_map.get(str(team_access.team_id), {}).get(
+                    "name"
+                )
                 if team_name:
                     team_access.team_name = team_name
 
@@ -247,13 +246,13 @@ class BotService:
         load_options = ["category", "team_access"]
         if with_details:
             load_options.append("configs.variables")
-        
-        item = await self.bot_repo.get(
-            filters={"id": id}, load_options=load_options
-        )
+
+        item = await self.bot_repo.get(filters={"id": id}, load_options=load_options)
 
         team_ids = [team_access.team_id for team_access in item.team_access]
-        response = await self.heimdall_client.get(f"api/v1/teams", params={"id": team_ids})
+        response = await self.heimdall_client.get(
+            f"api/v1/teams", params={"id": team_ids}
+        )
         teams = response.json()["data"]
 
         team_access_map = {}

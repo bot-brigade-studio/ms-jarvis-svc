@@ -39,19 +39,19 @@ async def get_bots(
     if team_id:
         filters["team_access.team_id"] = team_id
         joins.append("team_access")
-    
+
     search_fields = {"name": "contains"}
     search_term = None
     if name:
         search_term = name
-        
+
     items, total = await service.get_bots(
         skip=skip,
-        limit=limit, 
-        filters=filters, 
-        joins=joins, 
-        search_term=search_term, 
-        search_fields=search_fields
+        limit=limit,
+        filters=filters,
+        joins=joins,
+        search_term=search_term,
+        search_fields=search_fields,
     )
 
     return response.success(

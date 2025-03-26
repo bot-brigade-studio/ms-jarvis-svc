@@ -7,7 +7,6 @@ from app.schemas.chat import CreateMessageRequest, CreateThreadRequest
 from app.services.conversation_service import ConversationService
 from app.utils.http_client import NexusClient
 from app.utils.response_handler import response
-from chainable_llm.core.types import StreamChunk
 from sse_starlette import EventSourceResponse
 from app.core.exceptions import APIError
 
@@ -36,10 +35,7 @@ async def create_user_message(
             )
 
             async for token in stream_iterator:
-                if isinstance(token, StreamChunk):
-                    yield format_sse_data(json.dumps(token.model_dump()))
-                else:
-                    yield format_sse_data(json.dumps({"content": str(token)}))
+                yield token
 
         return EventSourceResponse(event_generator())
     except Exception as e:

@@ -2,6 +2,7 @@ from typing import AsyncGenerator, List, Dict, Any, Union
 from uuid import UUID
 import json
 from fastapi.params import Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.chat import CreateMessageRequest, SendMessageRequest
@@ -12,6 +13,11 @@ from app.repositories.bot_repository import BotConfigRepository, BotRepository
 from app.core.exceptions import APIError
 from botbrigade_llm import LLMClient
 from uuid_extensions import uuid7
+
+
+class StreamChunk(BaseModel):
+    content: str
+    done: bool = False
 
 
 class ConversationService:
@@ -85,9 +91,11 @@ class ConversationService:
         user_msg_id: str,
         assistant_msg_id: str,
         messages: List[Dict[str, str]],
-    ) -> Union[Dict[str, Any], AsyncGenerator[str, None]]:
+    ) -> Union[Dict[str, Any], AsyncGenerator[StreamChunk, None]]:
         """Handle the streaming response from the LLM."""
         accumulated_content = []
+
+        debug_print("messages", messages)
 
         llm_client = LLMClient(api_key=api_key)
 
@@ -96,36 +104,43 @@ class ConversationService:
             messages=messages,
             stream=True,
         ):
-            debug_print("Messages", messages)
+            try:
+                # yield chunk
+                # if chunk.startswith("event: message_stop"):
+                #     yield StreamChunk(content="", done=True)
+                #     break
 
-            if chunk:
-                accumulated_content.append(chunk)
-                yield chunk
+                if isinstance(chunk, str):
+                    chunk_data = json.loads(chunk)
+                    if "text" in chunk_data:
+                        text = chunk_data["text"]
+                        accumulated_content.append(text)
+                        yield chunk
+                else:
+                    yield chunk
+                    break
+            except json.JSONDecodeError:
+                continue
 
-                if chunk == "{}":
-                    full_content = "".join(accumulated_content)
+        full_content = "".join(accumulated_content)
 
-                    await self._send_message_nexus(
-                        thread_id,
-                        SendMessageRequest(
-                            content=full_content,
-                            role="assistant",
-                            id=assistant_msg_id,
-                            parent_id=user_msg_id,
-                            status="completed",
-                        ),
-                    )
+        await self._send_message_nexus(
+            thread_id,
+            SendMessageRequest(
+                content=full_content,
+                role="assistant",
+                id=assistant_msg_id,
+                parent_id=user_msg_id,
+                status="completed",
+            ),
+        )
 
-                    if len(messages) == 2:
-                        # remove system message
-                        messages.pop(0)
-                        fist_two_messages = messages
-                        fist_two_messages.append(
-                            {"role": "assistant", "content": full_content}
-                        )
-                        await self._update_thread_name(
-                            api_key, thread_id, fist_two_messages
-                        )
+        if len(messages) == 2:
+            # remove system message
+            messages.pop(0)
+            fist_two_messages = messages
+            fist_two_messages.append({"role": "assistant", "content": full_content})
+            await self._update_thread_name(api_key, thread_id, fist_two_messages)
 
     async def _update_thread_name(
         self, api_key: str, thread_id: UUID, fist_two_messages: List[Dict[str, str]]
