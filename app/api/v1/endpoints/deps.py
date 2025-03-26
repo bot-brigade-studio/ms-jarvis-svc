@@ -10,7 +10,7 @@ from app.models.base import (
     current_bearer_token,
 )
 from app.core.logging import logger
-from app.utils.http_client import HeimdallClient
+from app.utils.http_client import FuryClient
 
 security = HTTPBearer(
     scheme_name="Bearer", description="Enter your Bearer token", auto_error=False
@@ -31,7 +31,7 @@ async def _validate_permission(
     Returns: Tuple of (user_id, tenant_id, project_id)
     """
 
-    client = HeimdallClient()
+    client = FuryClient()
     token = request.headers.get("Authorization", "")
     response = await client.get(
         f"api/v1/rbac/validate-permission",
